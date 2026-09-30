@@ -5,7 +5,7 @@ import os
 
 
 # Maximum time a Python program is allowed to run
-DEFAULT_TIMEOUT = 7
+DEFAULT_TIMEOUT = 10
 
 
 def run_python(code: str, timeout: int = DEFAULT_TIMEOUT) -> str:
