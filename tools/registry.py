@@ -13,12 +13,18 @@ from .python_tools import (
     handle_tool_call as handle_python
 )
 
+from .rag_lookup import (
+    RAG_LOOKUP_TOOL_SCHEMA,
+    handle_tool_call as handle_rag
+)
 
-# All tools available to the LLM
+
+# All tools available to the LLM (Phase 5: rag_lookup added)
 TOOL_SCHEMAS = [
     CALCULATOR_TOOL_SCHEMA,
     WEB_SEARCH_TOOL_SCHEMA,
     PYTHON_TOOL_SCHEMA,
+    RAG_LOOKUP_TOOL_SCHEMA,
 ]
 
 
@@ -48,6 +54,9 @@ def dispatch(name: str, arguments: dict):
 
     elif name == "run_python":
         return handle_python(arguments)
+
+    elif name == "rag_lookup":
+        return handle_rag(arguments)
 
     else:
         return f"Error: Unknown tool '{name}'"

@@ -43,7 +43,8 @@ def execute_step(
                 "You have access to these tools:\n"
                 "- calculate: mathematical calculations\n"
                 "- web_search: current information or internet search\n"
-                "- run_python: Python computation or data processing\n\n"
+                "- run_python: Python computation or data processing\n"
+                "- rag_lookup: search local knowledge base documents\n\n"
 
                 "Choose the appropriate tool when needed.\n"
                 "Use previous step results when the current subtask "

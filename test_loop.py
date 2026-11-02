@@ -15,8 +15,6 @@ print("\n==============================")
 print("FINAL RESULTS")
 print("==============================")
 
-for result in state.results_so_far:
+for result in state["results_so_far"]:
     print(f"\nStep: {result['step']}")
     print(f"Result: {result['result']}")
-
-    

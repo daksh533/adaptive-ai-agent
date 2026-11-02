@@ -1,50 +1,51 @@
-from agent.state import AgentState
-from agent.planner import create_plan
-from agent.executor import execute_step
+"""
+agent/loop.py
+
+Public entry point for running the agent.
+
+Phase 4: delegates entirely to the LangGraph compiled graph.
+The hand-written Plan → Execute loop from Phase 3 is replaced;
+graph.invoke() handles state transitions automatically.
+"""
+
+from agent.graph import build_graph
+from agent.graph_state import GraphState
 
 
-def run_agent(goal: str):
+# Build the graph once at import time so it is reused across calls.
+_graph = build_graph()
+
+
+def run_agent(goal: str) -> GraphState:
     """
-    Run the complete multi-step agent loop.
+    Run the complete multi-step agent for a given goal.
 
-    Flow:
-    Plan → Execute → Observe → Update State → Next Step
+    Args:
+        goal: The user's natural-language task description.
+
+    Returns:
+        The final GraphState dict after all subtasks are complete.
+        Key fields:
+            state["plan"]            – ordered list of subtasks
+            state["results_so_far"] – list of {"step": ..., "result": ...}
+            state["current_step"]   – equals len(plan) when done
     """
 
-    # 1. Create initial state
-    state = AgentState(goal=goal)
+    initial_state: GraphState = {
+        "goal": goal,
+        "plan": [],
+        "current_step": 0,
+        "results_so_far": [],
+        "verification_status": "pending",
+        "error_diagnosis": "",
+        "correction_attempts": 0,
+        "is_done": False,
+    }
 
-    # 2. Create the plan
-    print("\nCreating plan...")
-    state.plan = create_plan(goal)
+    print(f"\n{'='*50}")
+    print(f"Goal: {goal}")
+    print(f"{'='*50}")
 
-    print("\nPlan:")
-    for i, step in enumerate(state.plan, start=1):
-        print(f"{i}. {step}")
+    final_state = _graph.invoke(initial_state)
 
-    # 3. Execute each step
-    while state.current_step < len(state.plan):
-
-        current_subtask = state.plan[state.current_step]
-
-        print(
-            f"\nExecuting Step "
-            f"{state.current_step + 1}: {current_subtask}"
-        )
-
-        # Execute current step
-        result = execute_step(
-            current_subtask,
-            state.results_so_far
-        )
-
-        # Store result
-        state.results_so_far.append(result)
-
-        # Move to next step
-        state.current_step += 1
-
-        print(f"Result: {result['result']}")
-
-    # 4. Return final state
-    return state
+    return final_state
