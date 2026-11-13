@@ -49,7 +49,8 @@ def run_python(code: str, timeout: int = DEFAULT_TIMEOUT) -> str:
             return f"Python error:\n{result.stderr.strip()}"
 
         # Return program output
-        return result.stdout.strip()
+        output = result.stdout.strip()
+        return output if output else "(Code executed successfully with no output)"
 
     except subprocess.TimeoutExpired:
         return f"Error: Python execution timed out after {timeout} seconds."
@@ -71,24 +72,36 @@ PYTHON_TOOL_SCHEMA = {
     "type": "function",
     "function": {
         "name": "run_python",
-        "description": "Execute a short Python code snippet and return its output.",
+        "description": (
+            "Execute a short Python code snippet and return its stdout. "
+            "You MUST pass the Python code in the 'code' parameter string. "
+            "Example: {\"code\": \"print(sum(range(1, 10)))\"}. "
+            "Never put result values in this parameter."
+        ),
         "parameters": {
             "type": "object",
             "properties": {
                 "code": {
                     "type": "string",
-                    "description": "Python code to execute. Put the complete code inside this string."
+                    "description": "The Python source code to execute as a string."
                 }
             },
             "required": ["code"],
-            "additionalProperties": False
         }
     }
 }
 
 
 def handle_tool_call(arguments: dict):
-    if "code" not in arguments:
-        return "Error: Missing 'code' argument."
+    if not isinstance(arguments, dict):
+        return "Error: Tool arguments must be a dictionary."
 
-    return run_python(arguments["code"])
+    # Look for code in known keys
+    for key in ("code", "script", "command", "source"):
+        if key in arguments and arguments[key]:
+            return run_python(str(arguments[key]))
+
+    return (
+        "Error: Missing 'code' parameter for run_python. "
+        "Please provide the Python code to run: {'code': 'print(...)'}."
+    )

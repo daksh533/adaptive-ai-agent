@@ -3,9 +3,9 @@ agent/loop.py
 
 Public entry point for running the agent.
 
-Phase 4: delegates entirely to the LangGraph compiled graph.
-The hand-written Plan → Execute loop from Phase 3 is replaced;
-graph.invoke() handles state transitions automatically.
+Phase 6: graph now routes executor -> verifier -> (next executor | END)
+The verifier inspects every step result for numeric accuracy,
+evidence grounding, and logical consistency before committing it to state.
 """
 
 from agent.graph import build_graph
@@ -24,11 +24,11 @@ def run_agent(goal: str) -> GraphState:
         goal: The user's natural-language task description.
 
     Returns:
-        The final GraphState dict after all subtasks are complete.
+        The final GraphState dict after all subtasks are verified and complete.
         Key fields:
-            state["plan"]            – ordered list of subtasks
-            state["results_so_far"] – list of {"step": ..., "result": ...}
-            state["current_step"]   – equals len(plan) when done
+            state["plan"]                – ordered list of subtasks
+            state["results_so_far"]     – list of {step, result, verification_status, verification_reason}
+            state["verification_status"] – "passed" | "failed" of the last step
     """
 
     initial_state: GraphState = {
@@ -37,6 +37,7 @@ def run_agent(goal: str) -> GraphState:
         "current_step": 0,
         "results_so_far": [],
         "verification_status": "pending",
+        "verification_reason": "",
         "error_diagnosis": "",
         "correction_attempts": 0,
         "is_done": False,

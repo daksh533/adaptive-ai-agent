@@ -1,95 +1,75 @@
+"""
+main.py
+
+Main interactive entry point for the Adaptive Self-Correcting AI Agent.
+Powered by LangGraph and equipped with all tools:
+- calculate (deterministic arithmetic)
+- web_search (internet search via DuckDuckGo)
+- run_python (sandboxed Python code execution)
+- rag_lookup (local knowledge base vector retrieval)
+
+Phase 6: Every step result is now inspected by the Verifier before
+being committed to state. Verification status is shown in the output.
+"""
+
+import sys
 import os
-import json
+from pathlib import Path
+
+# 1. Automatically link venv packages so 'python main.py' works without activation
+project_root = Path(__file__).resolve().parent
+venv_site_packages = project_root / "venv" / "Lib" / "site-packages"
+if venv_site_packages.exists() and str(venv_site_packages) not in sys.path:
+    sys.path.insert(0, str(venv_site_packages))
+
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
 from dotenv import load_dotenv
-from openai import OpenAI
+load_dotenv(dotenv_path=project_root / ".env")
 
-from tools.registry import TOOL_SCHEMAS, dispatch
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
 
-
-load_dotenv()
-
-
-client = OpenAI(
-    api_key=os.environ["GROQ_API_KEY"],
-    base_url="https://api.groq.com/openai/v1",
-)
+from agent.loop import run_agent
 
 
-# Take input from the user
-user_input = input("You: ")
+def main():
+    print("=" * 60)
+    print("  Adaptive Self-Correcting AI Agent  (Phase 6 — Verification)")
+    print("=" * 60)
+    print("Enter a multi-step goal or question.")
+    print("Type 'exit' or 'quit' to stop.\n")
+
+    while True:
+        try:
+            goal = input("\nYou: ").strip()
+        except (KeyboardInterrupt, EOFError):
+            print("\nExiting.")
+            break
+
+        if not goal:
+            continue
+        if goal.lower() in ("exit", "quit"):
+            print("Goodbye!")
+            break
+
+        try:
+            state = run_agent(goal)
+
+            print("\n" + "=" * 60)
+            print("FINAL RESULTS  (Phase 6 — With Verification)")
+            print("=" * 60)
+            for i, res in enumerate(state.get("results_so_far", []), 1):
+                v_status = res.get("verification_status", "?")
+                v_reason = res.get("verification_reason", "")
+                icon = "OK" if v_status == "passed" else "FAIL"
+                print(f"\n[Step {i}] {res['step']}")
+                print(f"Result  : {res['result']}")
+                print(f"Verified: [{icon}] {v_reason}")
+        except Exception as e:
+            print(f"\n[Error executing goal]: {e}")
 
 
-messages = [
-    {
-        "role": "system",
-        "content": (
-            "You are an AI agent with access to three tools: "
-            "calculate, web_search, and run_python. "
-            "Use calculate for mathematical expressions. "
-            "Use web_search when the user asks for current information "
-            "or an internet search. "
-            "Use run_python for computation, data processing, loops, "
-            "or tasks that genuinely require Python. "
-            "When calling run_python, its arguments MUST be a JSON object "
-            "containing a 'code' field with the Python code as a string. "
-            "Example: {\"code\": \"print(2 + 2)\"}. "
-            "Never put raw Python code directly in the arguments field."
-        )
-    },
-    {
-        "role": "user",
-        "content": user_input
-    }
-]
-
-
-# Agent loop
-while True:
-
-    response = client.chat.completions.create(
-        model="openai/gpt-oss-20b",
-        messages=messages,
-        tools=TOOL_SCHEMAS,
-    )
-
-    message = response.choices[0].message
-
-    # If the LLM wants to use a tool
-    if message.tool_calls:
-
-        # Add the assistant's tool request to conversation
-        messages.append(message)
-
-        for tool_call in message.tool_calls:
-
-            tool_name = tool_call.function.name
-
-            arguments = json.loads(
-                tool_call.function.arguments
-            )
-
-            print(f"Tool used: {tool_name}")
-
-            # Send tool call to registry
-            tool_result = dispatch(
-                tool_name,
-                arguments
-            )
-
-            # Add tool result to conversation
-            messages.append(
-                {
-                    "role": "tool",
-                    "tool_call_id": tool_call.id,
-                    "content": str(tool_result)
-                }
-            )
-
-        # Continue the loop so the LLM can process
-        # the tool result and give an answer
-        continue
-
-    # No tool call = final answer
-    print("AI:", message.content)
-    break
+if __name__ == "__main__":
+    main()

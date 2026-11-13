@@ -24,7 +24,11 @@ class GraphState(TypedDict):
     verification_status : str
         Status of the most recent verification check.
         Values: "pending" | "passed" | "failed"
-        Always "pending" in Phase 4; used from Phase 6 onward.
+        Set by verifier_node (Phase 6 onward).
+
+    verification_reason : str
+        Human-readable reason returned by the last verifier run.
+        Empty string when status is "pending".
 
     error_diagnosis : str
         Error category assigned by the Diagnoser node.
@@ -42,7 +46,8 @@ class GraphState(TypedDict):
     plan: list[str]
     current_step: int
     results_so_far: list[dict[str, Any]]
-    verification_status: str   # "pending" | "passed" | "failed"
-    error_diagnosis: str       # filled from Phase 7 onward
-    correction_attempts: int   # filled from Phase 8 onward
+    verification_status: str    # "pending" | "passed" | "failed"
+    verification_reason: str    # filled by verifier_node (Phase 6)
+    error_diagnosis: str        # filled from Phase 7 onward
+    correction_attempts: int    # filled from Phase 8 onward
     is_done: bool

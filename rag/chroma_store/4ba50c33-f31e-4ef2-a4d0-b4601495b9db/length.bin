@@ -1,4 +1,5 @@
-invalid type: string "Replanning\n10. Adaptive Risk-Based Verification (Core Research Novelty)\n11. Empirical Benchmarking and Evaluation across configurations\n12. Comprehensive Research Paper and Thesis Defense", expected i64ool integration (AST Calculator, Python Subprocess, Web Search)
-3. Basic Agent Control Loop (Planner-Executor architecture)
-4. State Graph Migration using LangGraph
-5. Knowl
+btask result is evaluated across four risk dimensions:
+1. Task Importance: Criticality of the subtask relative to the end goal.
+2. Model Uncertainty: Degree of hesitation, semantic entropy, or variance in model generations.
+3. Source Reliability: Trustworthiness and precision of the data source (e.g., deterministic AST tool vs open web crawl).
+4. Downstream Dependency: How many subsequent plan ste
