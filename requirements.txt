@@ -1,6 +1,13 @@
-openai
-python-dotenv
-ddgs
-langgraph
-chromadb
-sentence-transformers
+# Core LLM + graph orchestration
+openai>=1.0
+langgraph>=1.0
+
+# Configuration
+python-dotenv>=1.0
+
+# Tools
+ddgs>=9.0
+
+# RAG
+chromadb>=1.0
+sentence-transformers>=5.0

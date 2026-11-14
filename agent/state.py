@@ -1,3 +1,12 @@
+"""
+agent/state.py
+
+Legacy dataclass from the early phases (before LangGraph was introduced).
+
+The live agent uses :class:`agent.graph_state.GraphState` (a TypedDict) as the
+LangGraph channel schema. This dataclass is kept only because the early phase
+tests (``test_state.py``) use it.
+"""
 
 from dataclasses import dataclass, field
 from typing import Any

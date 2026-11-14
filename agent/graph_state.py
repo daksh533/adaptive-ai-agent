@@ -1,5 +1,4 @@
-from typing import Any
-from typing_extensions import TypedDict
+from typing import Any, TypedDict
 
 
 class GraphState(TypedDict):
@@ -13,41 +12,49 @@ class GraphState(TypedDict):
 
     plan : list[str]
         Ordered list of subtask strings produced by the Planner node.
+        Replaced by the Replanner when the plan is invalidated.
 
     current_step : int
-        Zero-based index of the subtask currently being (or about to be) executed.
+        Zero-based index of the subtask currently being executed/verified.
+        It only advances after the Verifier passes the step.
 
     results_so_far : list[dict[str, Any]]
-        Accumulated results from completed subtasks.
-        Each entry: {"step": <subtask str>, "result": <result str>}
+        Accumulated execution history. Each entry contains:
+            step, result, verification_status, verification_reason,
+            error_diagnosis, correction_attempts.
 
     verification_status : str
         Status of the most recent verification check.
-        Values: "pending" | "passed" | "failed"
-        Set by verifier_node (Phase 6 onward).
+        Values: "pending" | "passed" | "failed".
 
     verification_reason : str
         Human-readable reason returned by the last verifier run.
-        Empty string when status is "pending".
 
     error_diagnosis : str
-        Error category assigned by the Diagnoser node.
-        Empty string until Phase 7.
+        Error category assigned by the Diagnoser for the current failure.
 
     correction_attempts : int
-        How many times the Correction Engine has retried the current step.
-        Reset to 0 on each new step; used from Phase 8 onward.
+        Number of targeted correction attempts for the current step.
+        Reset to 0 whenever a step passes.
+
+    replan_attempts : int
+        Number of full plan rewrites performed so far. Bounded by MAX_REPLANS.
 
     is_done : bool
-        Set to True by the Executor node once all plan steps are finished.
+        True once all plan steps have passed, or the agent gives up.
+
+    agent_status : str
+        High-level outcome: "running" | "completed" | "failed".
     """
 
     goal: str
     plan: list[str]
     current_step: int
     results_so_far: list[dict[str, Any]]
-    verification_status: str    # "pending" | "passed" | "failed"
-    verification_reason: str    # filled by verifier_node (Phase 6)
-    error_diagnosis: str        # filled from Phase 7 onward
-    correction_attempts: int    # filled from Phase 8 onward
+    verification_status: str
+    verification_reason: str
+    error_diagnosis: str
+    correction_attempts: int
+    replan_attempts: int
     is_done: bool
+    agent_status: str

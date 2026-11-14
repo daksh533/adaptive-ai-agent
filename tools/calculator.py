@@ -44,7 +44,12 @@ def _eval_node(node):
         op_type = type(node.op)
         if op_type not in _OPERATORS:
             raise ValueError(f"Operator {op_type.__name__} not allowed.")
-        return _OPERATORS[op_type](_eval_node(node.left), _eval_node(node.right))
+        left = _eval_node(node.left)
+        right = _eval_node(node.right)
+        # Guard against accidentally huge computations such as 9 ** 9 ** 9.
+        if op_type is ast.Pow and abs(right) > 1000:
+            raise ValueError("Exponent too large (limit 1000).")
+        return _OPERATORS[op_type](left, right)
 
     if isinstance(node, ast.UnaryOp):
         op_type = type(node.op)

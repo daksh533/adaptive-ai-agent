@@ -18,13 +18,19 @@ from .rag_lookup import (
     handle_tool_call as handle_rag
 )
 
+from .knowledge_lookup import (
+    KNOWLEDGE_LOOKUP_TOOL_SCHEMA,
+    handle_tool_call as handle_knowledge
+)
 
-# All tools available to the LLM (Phase 5: rag_lookup added)
+
+# All tools available to the LLM (Phase 5: rag_lookup + web fallback)
 TOOL_SCHEMAS = [
     CALCULATOR_TOOL_SCHEMA,
     WEB_SEARCH_TOOL_SCHEMA,
     PYTHON_TOOL_SCHEMA,
     RAG_LOOKUP_TOOL_SCHEMA,
+    KNOWLEDGE_LOOKUP_TOOL_SCHEMA,
 ]
 
 
@@ -57,6 +63,9 @@ def dispatch(name: str, arguments: dict):
 
     elif name == "rag_lookup":
         return handle_rag(arguments)
+
+    elif name == "knowledge_lookup":
+        return handle_knowledge(arguments)
 
     else:
         return f"Error: Unknown tool '{name}'"

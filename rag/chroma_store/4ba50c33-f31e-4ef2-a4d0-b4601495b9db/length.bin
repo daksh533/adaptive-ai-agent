@@ -1,5 +1,7 @@
-btask result is evaluated across four risk dimensions:
-1. Task Importance: Criticality of the subtask relative to the end goal.
-2. Model Uncertainty: Degree of hesitation, semantic entropy, or variance in model generations.
-3. Source Reliability: Trustworthiness and precision of the data source (e.g., deterministic AST tool vs open web crawl).
-4. Downstream Dependency: How many subsequent plan ste
+# Multi-Method Verification Framework
+
+## Core Verification Protocols
+To ensure robustness without relying solely on subjective model confidence, the framework specifies three rigorous verification methods:
+
+### 1. Numeric Re-Check
+Independently re-evaluates all quantitative claims and arithmetic deductions. Uses an Abstract Syntax Tree (AST) evaluator or deterministic Python execution to verify m

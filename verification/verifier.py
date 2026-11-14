@@ -3,36 +3,24 @@ verification/verifier.py
 
 Phase 6 — Verification Module
 
-The Verifier acts as the agent's internal proofreader.
-It inspects every step result BEFORE it is committed to state,
-using three independent verification methods:
+The Verifier acts as the agent's internal proofreader. Every step result is
+inspected before it is committed to state, using three independent methods:
 
     1. Numeric Re-Check     – re-computes arithmetic found in the result.
-    2. Evidence Grounding   – cross-checks claims against RAG / factual context.
-    3. Logical Consistency  – checks whether result satisfies the subtask given context.
+    2. Evidence Grounding   – cross-checks claims against context / knowledge.
+    3. Logical Consistency  – checks whether the result satisfies the subtask.
 
-Returns a structured VerificationResult with:
-    status  : "passed" | "failed"
-    method  : which check ran (or "all" if all ran)
-    reason  : human-readable explanation of the verdict
+Each check returns a :class:`VerificationResult`; ``verify_step`` aggregates
+them into one verdict (any failure => overall failure).
 """
 
-import ast
-import re
-import os
-import time
+from __future__ import annotations
+
 import json
+import re
 
-from dotenv import load_dotenv
-from openai import OpenAI, RateLimitError
-
-
-load_dotenv()
-
-client = OpenAI(
-    api_key=os.environ["GROQ_API_KEY"],
-    base_url="https://api.groq.com/openai/v1",
-)
+from llm_client import chat_completion, extract_json_dict, message_content
+from tools.calculator import calculate
 
 
 # ---------------------------------------------------------------------------
@@ -44,13 +32,13 @@ class VerificationResult:
     Container for the outcome of a single verification pass.
 
     Attributes:
-        status  : "passed" or "failed"
-        method  : the verification method(s) that produced this result
-        reason  : explanation of why the check passed or failed
+        status: "passed" or "failed"
+        method: the verification method(s) that produced this result
+        reason: explanation of why the check passed or failed
     """
 
     def __init__(self, status: str, method: str, reason: str):
-        self.status = status   # "passed" | "failed"
+        self.status = status
         self.method = method
         self.reason = reason
 
@@ -69,60 +57,50 @@ class VerificationResult:
 
 
 # ---------------------------------------------------------------------------
-# Utility: LLM call with rate-limit backoff & JSON extraction
+# Utility: LLM call
 # ---------------------------------------------------------------------------
 
 def _llm_call(messages: list, temperature: float = 0.0) -> str:
-    """Call the Groq LLM with backoff on 429 rate-limit errors."""
-    max_retries = 5
-    for attempt in range(max_retries):
-        try:
-            response = client.chat.completions.create(
-                model="openai/gpt-oss-20b",
-                messages=messages,
-                temperature=temperature,
-            )
-            return response.choices[0].message.content.strip()
-        except RateLimitError as e:
-            wait = 2.0 * (1.5 ** attempt)
-            ms_m = re.search(r"try again in ([\d\.]+)ms", str(e))
-            s_m = re.search(r"try again in ([\d\.]+)s", str(e))
-            if ms_m:
-                wait = max(float(ms_m.group(1)) / 1000.0 + 0.5, 1.5)
-            elif s_m:
-                wait = max(float(s_m.group(1)) + 0.5, 2.0)
-            print(f"[Verifier] Rate limit hit. Pausing {wait:.1f}s...")
-            time.sleep(wait)
-
-    response = client.chat.completions.create(
-        model="openai/gpt-oss-20b",
-        messages=messages,
+    """Call the shared LLM gateway with a verifier-specific label."""
+    response = chat_completion(
+        messages,
         temperature=temperature,
+        label="Verifier",
     )
-    return response.choices[0].message.content.strip()
-
-
-def _extract_json_dict(text: str) -> dict:
-    """Safely extract a JSON dictionary from LLM response text."""
-    try:
-        return json.loads(text.strip())
-    except Exception:
-        pass
-
-    start = text.find("{")
-    end = text.rfind("}")
-    if start != -1 and end != -1 and end > start:
-        try:
-            return json.loads(text[start:end+1])
-        except Exception:
-            pass
-
-    return {}
+    return message_content(response)
 
 
 # ---------------------------------------------------------------------------
 # Check 1: Numeric Re-Check
 # ---------------------------------------------------------------------------
+
+def _normalize_math_text(text: str) -> str:
+    """
+    Normalise common Markdown/LaTeX forms so arithmetic can be parsed.
+
+    Examples:
+        ``25\\% of 800``            -> ``25% of 800``
+        ``0.25 \\times 800``        -> ``0.25 * 800``
+        ``\\boxed{200}``            -> ``200``
+        ``\\frac{1}{2}``            -> ``(1)/(2)``
+    """
+    normalized = text
+    # Treat "2 ** 10" as exponentiation, but "**bold**" as Markdown bold.
+    normalized = re.sub(r"(?<=\d)\s*\*\*\s*(?=\d)", "^", normalized)
+    normalized = normalized.replace("**", "")            # Markdown bold
+    normalized = normalized.replace("\\%", "%")
+    normalized = re.sub(r"\\times\b|\\cdot\b", "*", normalized)
+    normalized = normalized.replace("\\div", "/")
+    normalized = re.sub(r"\\text\{([^{}]*)\}", r"\1", normalized)
+    normalized = re.sub(r"\\boxed\{([^{}]*)\}", r"\1", normalized)
+    normalized = re.sub(r"\\frac\{([^{}]*)\}\{([^{}]*)\}", r"(\1)/(\2)", normalized)
+    for token in ("\\(", "\\)", "\\[", "\\]", "$"):
+        normalized = normalized.replace(token, " ")
+    normalized = normalized.replace("−", "-").replace("×", "*").replace("÷", "/")
+    # Drop thousands separators: 1,000 -> 1000
+    normalized = re.sub(r"(?<=\d),(?=\d{3}\b)", "", normalized)
+    return normalized
+
 
 def _extract_math_expressions(text: str) -> list[tuple[str, float, float]]:
     """
@@ -131,40 +109,47 @@ def _extract_math_expressions(text: str) -> list[tuple[str, float, float]]:
     Supported formats:
         - "25% of 800 = 200" or "25% of 800 is 200"
         - "15 + 30 = 45"
-        - "30 + 50 = 80"
         - "135 * 2 = 270"
+        - LaTeX: "25\\% of 800 = \\boxed{200}"
 
     Returns:
         List of (expr_label, stated_value, computed_value) tuples.
     """
-    pairs = []
+    pairs: list[tuple[str, float, float]] = []
+    normalized = _normalize_math_text(text)
 
-    # Pattern 1: Percentage calculations, e.g. "25% of 800 = 200"
+    # Pattern 1: Percentage calculations, e.g. "25% of 800 = 200".
+    # The trailing lookahead rejects intermediate values such as
+    # "25% of 800 = 0.25 * 800 = 200" (0.25 is followed by an operator).
     pct_pattern = re.finditer(
-        r"(\d+(?:\.\d+)?)\s*%\s*(?:of\s*)?(\d+(?:\.\d+)?)\s*(?:=|:|is|gives)?\s*[\*]*([\-]?\d+(?:\.\d+)?)[\*]*",
-        text,
+        r"(?<!\d)(\d+(?:\.\d+)?)\s*%\s*(?:of\s+)?(\d+(?:\.\d+)?)(?!\d|\.\d)\s*"
+        r"(?:=|:|equals?|is|gives|->|→)\s*[\s*]*"
+        r"(-?\d+(?:\.\d+)?)(?!\d|\.\d)(?!\s*[\+\-\*/^])",
+        normalized,
         re.IGNORECASE,
     )
-    for m in pct_pattern:
-        pct = float(m.group(1))
-        base = float(m.group(2))
-        stated = float(m.group(3))
+    for match in pct_pattern:
+        pct = float(match.group(1))
+        base = float(match.group(2))
+        stated = float(match.group(3))
         computed = (pct / 100.0) * base
-        pairs.append((f"{pct}% of {base}", stated, float(computed)))
+        pairs.append((f"{pct:g}% of {base:g}", stated, float(computed)))
 
-    # Pattern 2: Standard equations with arithmetic operator (+, -, *, /, ^)
+    # Pattern 2: Standard equations with an arithmetic operator (+, -, *, /, ^).
     eq_pattern = re.finditer(
-        r"([0-9\.\s\(\)]+[\+\-\*\/\^][0-9\.\s\+\-\*\/\^\(\)]+)\s*[=:]\s*[\*]*([\-]?\d+(?:\.\d+)?)[\*]*",
-        text,
+        r"(-?(?:\d+(?:\.\d+)?|\([^()]*\))"
+        r"(?:\s*[\+\-\*/\^]\s*(?:\d+(?:\.\d+)?|\([^()]*\)))+)"
+        r"\s*(?:=|:)\s*[\s*]*(-?\d+(?:\.\d+)?)(?!\d|\.\d)",
+        normalized,
     )
-    for m in eq_pattern:
-        raw_expr = m.group(1).strip()
-        stated = float(m.group(2))
+    for match in eq_pattern:
+        raw_expr = match.group(1).strip()
+        stated = float(match.group(2))
         try:
             clean_expr = raw_expr.replace("^", "**")
-            tree = ast.parse(clean_expr, mode="eval")
-            computed = float(eval(compile(tree, "<string>", "eval")))
-            pairs.append((raw_expr, stated, computed))
+            computed = calculate(clean_expr)
+            if isinstance(computed, (int, float)) and not isinstance(computed, bool):
+                pairs.append((raw_expr, stated, float(computed)))
         except Exception:
             continue
 
@@ -173,13 +158,12 @@ def _extract_math_expressions(text: str) -> list[tuple[str, float, float]]:
 
 def numeric_recheck(subtask: str, result: str) -> VerificationResult:
     """
-    Verification Method 1: Extract numeric expressions from *result* and
+    Verification Method 1: extract numeric expressions from *result* and
     re-compute them independently. Flag mismatches.
     """
     pairs = _extract_math_expressions(result)
 
     if not pairs:
-        # No arithmetic found — pass by default (nothing to verify)
         return VerificationResult(
             status="passed",
             method="numeric_recheck",
@@ -188,7 +172,8 @@ def numeric_recheck(subtask: str, result: str) -> VerificationResult:
 
     errors = []
     for raw_expr, stated, computed in pairs:
-        if abs(computed - stated) > max(0.01 * abs(stated), 0.001):
+        tolerance = max(0.01 * abs(stated), 0.001)
+        if abs(computed - stated) > tolerance:
             errors.append(
                 f"Expression '{raw_expr}' stated as {stated} "
                 f"but independently computed as {computed:.4f}."
@@ -212,56 +197,70 @@ def numeric_recheck(subtask: str, result: str) -> VerificationResult:
 # Check 2: Evidence Grounding Check
 # ---------------------------------------------------------------------------
 
+def _context_block(goal: str, previous_results: list | None) -> str:
+    """Build the shared goal + previous-results context used by LLM checks."""
+    context = ""
+    if goal:
+        context += f"Overall Goal: {goal}\n"
+
+    if previous_results:
+        condensed = [
+            {
+                "step": result.get("step", ""),
+                "result": str(result.get("result", ""))[:200],
+            }
+            for result in previous_results
+        ]
+        context += (
+            "Context from previous steps:\n"
+            f"{json.dumps(condensed, indent=2)}\n"
+        )
+
+    return context
+
+
 def evidence_grounding_check(
     subtask: str,
     result: str,
     goal: str = "",
-    previous_results: list = None
+    previous_results: list | None = None,
 ) -> VerificationResult:
     """
-    Verification Method 2: Cross-reference factual claims in *result*
+    Verification Method 2: cross-reference factual claims in *result*
     against verifiable knowledge or context.
     """
-    context_str = ""
-    if goal:
-        context_str += f"Overall Goal: {goal}\n"
-    if previous_results:
-        condensed = [
-            {"step": r.get("step", ""), "result": str(r.get("result", ""))[:200]}
-            for r in previous_results
-        ]
-        context_str += f"Context from previous steps:\n{json.dumps(condensed, indent=2)}\n"
-
     prompt_text = (
         f"You are a strict evidence checker for an AI agent.\n\n"
-        f"{context_str}\n"
+        f"{_context_block(goal, previous_results)}\n"
         f"Current Subtask:\n{subtask}\n\n"
         f"Agent's result:\n{result}\n\n"
         f"Your job: Determine whether the factual or mathematical claims in the result "
         f"are plausible and grounded (supported by previous results, tools, or established facts).\n"
-        f"If the result is an arithmetic calculation or deduction derived from previous steps, return verdict: passed.\n\n"
+        f"If the result is an arithmetic calculation or deduction derived from previous steps, return verdict: passed.\n"
+        f"If the result cites a knowledge-base document/chunk or a web URL, treat the claim as grounded "
+        f"as long as the citation matches the claim.\n"
+        f"If the result says it came from a web search but gives no URL, return verdict: failed.\n\n"
         f"Return ONLY a valid JSON object in this exact format:\n"
         f'{{"verdict": "passed" or "failed", "reason": "one sentence explanation"}}'
     )
 
     try:
-        raw = _llm_call([{"role": "user", "content": prompt_text}])
-        data = _extract_json_dict(raw)
+        data = extract_json_dict(_llm_call([{"role": "user", "content": prompt_text}]))
         if data:
-            verdict = data.get("verdict", "passed").lower()
+            verdict = str(data.get("verdict", "passed")).lower()
             reason = data.get("reason", "No reason provided.")
             return VerificationResult(
                 status="passed" if "pass" in verdict else "failed",
                 method="evidence_grounding",
                 reason=reason,
             )
-    except Exception:
-        pass
+    except Exception as exc:
+        print(f"[Verifier] Evidence check unavailable ({exc}). Skipping.")
 
     return VerificationResult(
         status="passed",
         method="evidence_grounding",
-        reason="Evidence grounding check inconclusive — defaulting to passed.",
+        reason="Evidence grounding check inconclusive - skipped (fail-open).",
     )
 
 
@@ -273,25 +272,15 @@ def logical_consistency_check(
     subtask: str,
     result: str,
     goal: str = "",
-    previous_results: list = None
+    previous_results: list | None = None,
 ) -> VerificationResult:
     """
-    Verification Method 3: Checks whether the result logically and
-    completely answers the given subtask, taking previous steps into account.
+    Verification Method 3: checks whether the result logically and completely
+    answers the given subtask, taking previous steps into account.
     """
-    context_str = ""
-    if goal:
-        context_str += f"Overall Goal: {goal}\n"
-    if previous_results:
-        condensed = [
-            {"step": r.get("step", ""), "result": str(r.get("result", ""))[:200]}
-            for r in previous_results
-        ]
-        context_str += f"Previous steps results:\n{json.dumps(condensed, indent=2)}\n"
-
     prompt_text = (
         f"You are a strict logical consistency checker for an AI agent.\n\n"
-        f"{context_str}\n"
+        f"{_context_block(goal, previous_results)}\n"
         f"Current Subtask:\n{subtask}\n\n"
         f"Agent's result:\n{result}\n\n"
         f"Question: Does this result directly and completely address the current subtask "
@@ -305,78 +294,65 @@ def logical_consistency_check(
     )
 
     try:
-        raw = _llm_call([{"role": "user", "content": prompt_text}])
-        data = _extract_json_dict(raw)
+        data = extract_json_dict(_llm_call([{"role": "user", "content": prompt_text}]))
         if data:
-            verdict = data.get("verdict", "passed").lower()
+            verdict = str(data.get("verdict", "passed")).lower()
             reason = data.get("reason", "No reason provided.")
             return VerificationResult(
                 status="passed" if "pass" in verdict else "failed",
                 method="logical_consistency",
                 reason=reason,
             )
-    except Exception:
-        pass
+    except Exception as exc:
+        print(f"[Verifier] Consistency check unavailable ({exc}). Skipping.")
 
     return VerificationResult(
         status="passed",
         method="logical_consistency",
-        reason="Logical consistency check inconclusive — defaulting to passed.",
+        reason="Logical consistency check inconclusive - skipped (fail-open).",
     )
 
 
 # ---------------------------------------------------------------------------
-# Public API: Run all three verification checks
+# Public API: run all three checks
 # ---------------------------------------------------------------------------
 
 def verify_step(
     subtask: str,
     result: str,
     goal: str = "",
-    previous_results: list = None
+    previous_results: list | None = None,
 ) -> VerificationResult:
     """
     Run all three verification methods on a step result.
 
     The overall verdict is:
-        "passed"  → all three checks passed
-        "failed"  → at least one check failed
-
-    Args:
-        subtask:          The subtask description that was executed.
-        result:           The result string produced by the Executor.
-        goal:             The overarching user goal.
-        previous_results: Prior step outputs (for multi-step context).
-
-    Returns:
-        A VerificationResult with the aggregated verdict.
+        "passed" -> all three checks passed
+        "failed" -> at least one check failed
     """
     print("[Verifier] Running Numeric Re-Check...")
     numeric_result = numeric_recheck(subtask, result)
-    print(f"[Verifier] Numeric Re-Check: {numeric_result.status.upper()} — {numeric_result.reason}")
+    print(f"[Verifier] Numeric Re-Check: {numeric_result.status.upper()} - {numeric_result.reason}")
 
     print("[Verifier] Running Evidence Grounding Check...")
     evidence_result = evidence_grounding_check(subtask, result, goal, previous_results)
-    print(f"[Verifier] Evidence Grounding: {evidence_result.status.upper()} — {evidence_result.reason}")
+    print(f"[Verifier] Evidence Grounding: {evidence_result.status.upper()} - {evidence_result.reason}")
 
     print("[Verifier] Running Logical Consistency Check...")
     logic_result = logical_consistency_check(subtask, result, goal, previous_results)
-    print(f"[Verifier] Logical Consistency: {logic_result.status.upper()} — {logic_result.reason}")
+    print(f"[Verifier] Logical Consistency: {logic_result.status.upper()} - {logic_result.reason}")
 
-    # Aggregate: any failure = overall failure
     failures = [
-        r for r in [numeric_result, evidence_result, logic_result]
-        if r.status == "failed"
+        check
+        for check in (numeric_result, evidence_result, logic_result)
+        if check.status == "failed"
     ]
 
     if failures:
-        combined_reason = " | ".join(
-            f"[{f.method}] {f.reason}" for f in failures
-        )
         return VerificationResult(
             status="failed",
             method="all",
-            reason=combined_reason,
+            reason=" | ".join(f"[{failure.method}] {failure.reason}" for failure in failures),
         )
 
     return VerificationResult(

@@ -72,7 +72,7 @@ def test_phase_calculator_and_verification():
 # TEST 2: Phase 2 (Python Execution) + Phase 6 (Logical Verification)
 # ===========================================================================
 def test_phase_python_tool():
-    print_header("TEST 2: Python Tool (Sandboxed Execution) + Verification")
+    print_header("TEST 2: Python Tool (Isolated Subprocess) + Verification")
     goal = "Execute Python code to calculate the factorial of 6 and print the result."
     print(f"Prompt: {goal}\n")
     state = run_agent(goal)
@@ -80,7 +80,7 @@ def test_phase_python_tool():
 
     all_text = " ".join(str(r["result"]) for r in state["results_so_far"])
     assert "720" in all_text, "Expected factorial of 6 (720) in output"
-    print("\n>>> [PASSED] Test 2: Python code executed in sandbox and verified.")
+    print("\n>>> [PASSED] Test 2: Python code executed in an isolated subprocess and verified.")
 
 
 # ===========================================================================

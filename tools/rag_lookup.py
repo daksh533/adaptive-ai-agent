@@ -20,7 +20,7 @@ The tool returns a formatted string containing the most relevant chunks
 and their source citations, which the LLM then uses to compose its answer.
 """
 
-from rag.retriever import retrieve
+from tools.knowledge_lookup import lookup_with_fallback
 
 
 # ---------------------------------------------------------------------------
@@ -32,12 +32,10 @@ RAG_LOOKUP_TOOL_SCHEMA = {
     "function": {
         "name": "rag_lookup",
         "description": (
-            "Search the local knowledge base and return the most relevant "
-            "document chunks for a given query. "
-            "Use this tool when you need to ground your answer in specific "
-            "documents or when the question can be answered from the "
-            "pre-loaded knowledge base. "
-            "Always cite the source document and chunk index in your final answer."
+            "Search the local knowledge base first for a given query, and "
+            "automatically fall back to live web search if the information is "
+            "not found in the knowledge base. Always cite the source document "
+            "and chunk index or web URL in your final answer."
         ),
         "parameters": {
             "type": "object",
@@ -46,7 +44,7 @@ RAG_LOOKUP_TOOL_SCHEMA = {
                     "type": "string",
                     "description": (
                         "The natural-language search query to look up in "
-                        "the knowledge base."
+                        "the knowledge base or web."
                     ),
                 },
                 "top_k": {
@@ -72,44 +70,29 @@ def handle_tool_call(arguments: dict) -> str:
     """
     Execute a rag_lookup tool call.
 
+    Checks the local RAG knowledge base first. If no relevant chunks are found
+    or relevance distance is high, automatically falls back to live web search
+    so the agent gets the information and advances to the next step immediately.
+
     Args:
         arguments: Dict with keys:
                      - "query"  (str, required)
                      - "top_k"  (int, optional, default 4)
 
     Returns:
-        A formatted string containing retrieved chunks with source citations,
-        or an error message if retrieval fails.
+        Source-labeled result string (from KB or web fallback).
     """
     query = arguments.get("query", "").strip()
-    top_k = int(arguments.get("top_k", 4))
+
+    try:
+        top_k = int(arguments.get("top_k", 4))
+    except (TypeError, ValueError):
+        top_k = 4
+    top_k = max(1, top_k)
 
     if not query:
         return "Error: 'query' argument is required for rag_lookup."
 
-    try:
-        chunks = retrieve(query, top_k=top_k)
-    except RuntimeError as exc:
-        return (
-            f"RAG knowledge base is not available: {exc}\n"
-            "Ask the user to run 'python -m rag.ingest' first."
-        )
-    except Exception as exc:
-        return f"RAG lookup failed: {exc}"
-
-    if not chunks:
-        return f"No relevant chunks found in the knowledge base for query: '{query}'"
-
-    # Format results for the LLM
-    lines = [f"RAG results for query: '{query}'\n"]
-    for i, chunk in enumerate(chunks, start=1):
-        lines.append(
-            f"--- Result {i} ---\n"
-            f"Source : {chunk['source']} (chunk {chunk['chunk_index']} "
-            f"of {chunk['total_chunks']})\n"
-            f"Similarity distance: {chunk['distance']}\n"
-            f"Content:\n{chunk['text']}\n"
-        )
-
-    return "\n".join(lines)
+    result = lookup_with_fallback(query, top_k=top_k)
+    return result["text"]
 

@@ -1,11 +1,29 @@
+"""
+tools/python_tools.py
+
+Runs short Python snippets in a separate, isolated interpreter process.
+
+This is a convenience execution tool, not a hardened security sandbox:
+the child process is started with ``-I`` (isolated mode, no user site
+packages / PYTHON* env vars), runs inside a temporary working directory, and
+is killed after a timeout. It still runs with the current user's permissions,
+so untrusted code should not be executed with it.
+"""
+
+import os
 import subprocess
 import sys
 import tempfile
-import os
 
 
-# Maximum time a Python program is allowed to run
 DEFAULT_TIMEOUT = 10
+MAX_OUTPUT_CHARS = 4000
+
+
+def _truncate(text: str) -> str:
+    if len(text) <= MAX_OUTPUT_CHARS:
+        return text
+    return text[:MAX_OUTPUT_CHARS] + "\n... [output truncated]"
 
 
 def run_python(code: str, timeout: int = DEFAULT_TIMEOUT) -> str:
@@ -13,58 +31,40 @@ def run_python(code: str, timeout: int = DEFAULT_TIMEOUT) -> str:
     Execute a short Python code snippet in a separate subprocess.
 
     Args:
-        code: Python code to execute.
+        code:    Python code to execute.
         timeout: Maximum execution time in seconds.
 
     Returns:
         The program's output or an error message.
     """
-
     if not code or not code.strip():
         return "Error: No Python code provided."
 
-    temp_file = None
-
     try:
-        # Create a temporary Python file
-        with tempfile.NamedTemporaryFile(
-            mode="w",
-            suffix=".py",
-            delete=False,
-            encoding="utf-8"
-        ) as file:
-            file.write(code)
-            temp_file = file.name
+        with tempfile.TemporaryDirectory(prefix="agent_python_") as work_dir:
+            script_path = os.path.join(work_dir, "snippet.py")
+            with open(script_path, "w", encoding="utf-8") as script:
+                script.write(code)
 
-        # Run the Python file in a separate subprocess
-        result = subprocess.run(
-            [sys.executable, temp_file],
-            capture_output=True,
-            text=True,
-            timeout=timeout
-        )
+            result = subprocess.run(
+                [sys.executable, "-I", script_path],
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                cwd=work_dir,
+            )
 
-        # If the program produced an error
         if result.returncode != 0:
-            return f"Python error:\n{result.stderr.strip()}"
+            return "Python error:\n" + _truncate(result.stderr.strip())
 
-        # Return program output
         output = result.stdout.strip()
-        return output if output else "(Code executed successfully with no output)"
+        return _truncate(output) if output else "(Code executed successfully with no output)"
 
     except subprocess.TimeoutExpired:
         return f"Error: Python execution timed out after {timeout} seconds."
 
-    except Exception as e:
-        return f"Error: {str(e)}"
-
-    finally:
-        # Delete temporary file
-        if temp_file and os.path.exists(temp_file):
-            try:
-                os.remove(temp_file)
-            except Exception:
-                pass
+    except Exception as exc:
+        return f"Error: {exc}"
 
 
 # Tool schema for the LLM
@@ -83,12 +83,12 @@ PYTHON_TOOL_SCHEMA = {
             "properties": {
                 "code": {
                     "type": "string",
-                    "description": "The Python source code to execute as a string."
+                    "description": "The Python source code to execute as a string.",
                 }
             },
             "required": ["code"],
-        }
-    }
+        },
+    },
 }
 
 
@@ -96,7 +96,6 @@ def handle_tool_call(arguments: dict):
     if not isinstance(arguments, dict):
         return "Error: Tool arguments must be a dictionary."
 
-    # Look for code in known keys
     for key in ("code", "script", "command", "source"):
         if key in arguments and arguments[key]:
             return run_python(str(arguments[key]))
