@@ -34,7 +34,8 @@ from agent.planner import create_plan
 from correction.corrector import correct_step
 from planner.replanner import replan_step
 from verification.diagnoser import diagnose_step
-from verification.verifier import verify_step
+from verification.risk_classifier import classify_risk       # Phase 10
+from verification.verifier import VerificationResult, verify_step, verify_step_adaptive  # Phase 10/11
 
 
 MAX_CORRECTION_ATTEMPTS = 2
@@ -97,6 +98,7 @@ def planner_node(state: GraphState) -> dict:
         "replan_attempts": 0,
         "is_done": False,
         "agent_status": "running",
+        "verification_mode": state.get("verification_mode", "adaptive"),
     }
 
 
@@ -157,12 +159,36 @@ def verifier_node(state: GraphState) -> dict:
 
     print(f"\n[Verifier] Verifying Step {step_index + 1}/{len(plan)}...")
 
-    verdict = verify_step(
-        subtask=subtask,
-        result=result_text,
-        goal=state.get("goal", ""),
-        previous_results=_passed_results(state.get("results_so_far", [])[:-1]),
-    )
+    # Phase 11: Multi-configuration support (baseline / fixed / adaptive)
+    mode = state.get("verification_mode", "adaptive")
+    if mode == "baseline":
+        print(f"[Verifier] Configuration: BASELINE — skipping verification for Step {step_index + 1}.")
+        verdict = VerificationResult(
+            status="passed",
+            method="baseline_bypass",
+            reason="Baseline configuration: verification bypassed.",
+        )
+        risk_level = "none"
+    elif mode == "fixed":
+        print(f"[Verifier] Configuration: FIXED (Phase 9) — running full 3-way verification...")
+        verdict = verify_step(
+            subtask=subtask,
+            result=result_text,
+            goal=state.get("goal", ""),
+            previous_results=_passed_results(state.get("results_so_far", [])[:-1]),
+        )
+        risk_level = "high"
+    else:
+        # Phase 10: Adaptive risk-based verification
+        risk_info = classify_risk(subtask, result_text)
+        risk_level = risk_info["risk_level"]
+        verdict = verify_step_adaptive(
+            subtask=subtask,
+            result=result_text,
+            goal=state.get("goal", ""),
+            previous_results=_passed_results(state.get("results_so_far", [])[:-1]),
+            risk_level=risk_level,
+        )
 
     updated_entry = dict(latest_entry)
     updated_entry.update(
@@ -194,6 +220,7 @@ def verifier_node(state: GraphState) -> dict:
             "correction_attempts": 0,  # reset per-step counter
             "is_done": is_done,
             "agent_status": "completed" if is_done else "running",
+            "risk_level": risk_level,  # Phase 10
         }
 
     return {
@@ -203,6 +230,7 @@ def verifier_node(state: GraphState) -> dict:
         "verification_reason": verdict.reason,
         "is_done": False,
         "agent_status": "running",
+        "risk_level": risk_level,  # Phase 10
     }
 
 

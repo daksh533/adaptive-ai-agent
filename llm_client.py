@@ -31,6 +31,20 @@ DEFAULT_BASE_URL = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1")
 
 _client: OpenAI | None = None
 
+# Minimum gap between consecutive LLM calls (seconds).
+# Groq free tier allows ~30 req/min → ~2.0s gap is safe.
+_MIN_CALL_INTERVAL = float(os.getenv("LLM_CALL_INTERVAL", "2.0"))
+_last_call_time: float = 0.0
+
+
+def _throttle() -> None:
+    """Enforce minimum gap between calls to prevent rate limit spikes."""
+    global _last_call_time
+    elapsed = time.time() - _last_call_time
+    if elapsed < _MIN_CALL_INTERVAL:
+        time.sleep(_MIN_CALL_INTERVAL - elapsed)
+    _last_call_time = time.time()
+
 
 # ---------------------------------------------------------------------------
 # Client
@@ -67,19 +81,20 @@ def get_client() -> OpenAI:
 
 def _retry_delay(exc: Exception, attempt: int) -> float:
     """Honour the delay suggested by Groq when present, else back off."""
-    wait = 2.0 * (1.5 ** attempt)
-    # Handles "500ms", "106s" and compound forms like "1m46.27s".
+    wait = 3.0 * (1.5 ** attempt)
+    # Handles "500ms", "106s", "in 1.5s", "in 1m46.27s", "retry after 5s", etc.
     match = re.search(
-        r"try again in (?:(?P<minutes>\d+)m)?(?:(?P<millis>\d+)ms|(?P<seconds>[\d\.]+)s)",
+        r"(?:try again in|retry after|in)\s+(?:(?P<minutes>\d+)m)?\s*(?:(?P<millis>\d+)ms|(?P<seconds>[\d\.]+)s)",
         str(exc),
+        re.IGNORECASE,
     )
     if match:
         if match.group("millis"):
-            wait = max(float(match.group("millis")) / 1000.0 + 0.5, 1.5)
+            wait = max(float(match.group("millis")) / 1000.0 + 0.5, 2.0)
         else:
             minutes = float(match.group("minutes") or 0)
             seconds = float(match.group("seconds") or 0)
-            wait = max(minutes * 60.0 + seconds + 0.5, 1.5)
+            wait = max(minutes * 60.0 + seconds + 1.0, 2.0)
     return wait
 
 
@@ -151,12 +166,13 @@ def chat_completion(
 
     for attempt in range(max_retries):
         try:
+            _throttle()
             return get_client().chat.completions.create(**kwargs)
         except RateLimitError as exc:
             wait = _retry_delay(exc, attempt)
             if _is_daily_quota_error(exc) or wait > MAX_SINGLE_WAIT:
                 raise _quota_runtime_error(exc, wait) from exc
-            print(f"[{label}] Rate limit hit. Pausing {wait:.1f}s before retrying...")
+            print(f"[{label}] Rate limit hit. Pausing {wait:.1f}s before retrying (attempt {attempt + 1}/{max_retries})...")
             time.sleep(wait)
         except Exception as exc:
             # Some SDK/proxy combinations surface 429s as generic APIStatusError.
@@ -165,10 +181,11 @@ def chat_completion(
             wait = _retry_delay(exc, attempt)
             if _is_daily_quota_error(exc) or wait > MAX_SINGLE_WAIT:
                 raise _quota_runtime_error(exc, wait) from exc
-            print(f"[{label}] Rate limit hit. Pausing {wait:.1f}s before retrying...")
+            print(f"[{label}] Rate limit hit. Pausing {wait:.1f}s before retrying (attempt {attempt + 1}/{max_retries})...")
             time.sleep(wait)
 
     try:
+        _throttle()
         return get_client().chat.completions.create(**kwargs)
     except RateLimitError as exc:
         raise _quota_runtime_error(exc) from exc

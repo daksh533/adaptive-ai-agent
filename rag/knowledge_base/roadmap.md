@@ -9,7 +9,7 @@ The Adaptive Self-Correcting AI Agent is an autonomous LLM agent framework that 
 - IILM University, Greater Noida
 - Academic Year: 2026
 
-## Phase Roadmap (12 Phases)
+## Phase Roadmap (13 Phases)
 
 | Phase | Component | Status | Description |
 |-------|-----------|--------|-------------|
@@ -22,9 +22,10 @@ The Adaptive Self-Correcting AI Agent is an autonomous LLM agent framework that 
 | 7 | Structured Error Diagnosis | Complete | 6-class error taxonomy (calculation, tool, grounding, consistency, incomplete, unknown) |
 | 8 | Targeted Self-Correction Engine | Complete | Targeted recovery routines per error class |
 | 9 | Dynamic Plan Invalidation & Replanning | Complete | Recomputes remaining subtasks after repeated failures |
-| 10 | Adaptive Risk-Based Verification | Planned | Core research novelty — risk-adjusted verification strictness |
-| 11 | Empirical Benchmarking & Evaluation | Planned | Testing across configurations |
-| 12 | Research Paper & Thesis Defense | Planned | Academic write-up and defense |
+| 10 | Adaptive Risk-Based Verification | Complete | Risk classifier (LOW/MEDIUM/HIGH) dynamically scales verification depth per subtask |
+| 11 | Empirical Benchmarking & Evaluation | Complete | Standardized task suite, comparative matrix (Baseline vs. Fixed vs. Adaptive), metrics & reports |
+| 12 | Interactive Visual Web UI Dashboard | Planned | Modern web UI to visualize live execution, verification, and correction traces |
+| 13 | Research Paper & Thesis Defense | Planned | Academic write-up and defense |
 
 ## Core Tools
 - `calculate`: Safe mathematical expression evaluation (AST-based)

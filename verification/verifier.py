@@ -360,3 +360,94 @@ def verify_step(
         method="all",
         reason="All three verification checks passed.",
     )
+
+
+# ---------------------------------------------------------------------------
+# Public API: Phase 10 — Risk-Adaptive Verification
+# ---------------------------------------------------------------------------
+
+def verify_step_adaptive(
+    subtask: str,
+    result: str,
+    goal: str = "",
+    previous_results: list | None = None,
+    risk_level: str = "high",
+) -> VerificationResult:
+    """
+    Phase 10: Risk-tier-aware verification.
+
+    Dispatches to a subset of checks based on *risk_level*:
+
+        LOW    -> numeric_recheck only  (0 LLM calls)
+        MEDIUM -> numeric_recheck + evidence_grounding_check  (1 LLM call)
+        HIGH   -> full verify_step()  (2 LLM calls) — identical to Phase 6
+
+    Args:
+        subtask:          The current subtask string.
+        result:           The agent result to verify.
+        goal:             The overall agent goal (for context).
+        previous_results: Results from earlier steps (for context).
+        risk_level:       "low" | "medium" | "high" (default "high").
+
+    Returns:
+        A :class:`VerificationResult` with an aggregated verdict.
+    """
+    tier = str(risk_level).strip().lower()
+    if tier not in ("low", "medium", "high"):
+        tier = "high"
+
+    # ------------------------------------------------------------------ HIGH
+    if tier == "high":
+        print(f"[Verifier] Risk Tier: HIGH — running Numeric + Grounding + Logical")
+        return verify_step(subtask, result, goal, previous_results)
+
+    # ----------------------------------------------------------------- MEDIUM
+    if tier == "medium":
+        print(f"[Verifier] Risk Tier: MEDIUM — running Numeric + Evidence Grounding")
+
+        print("[Verifier] Running Numeric Re-Check...")
+        numeric_result = numeric_recheck(subtask, result)
+        print(f"[Verifier] Numeric Re-Check: {numeric_result.status.upper()} - {numeric_result.reason}")
+
+        print("[Verifier] Running Evidence Grounding Check...")
+        evidence_result = evidence_grounding_check(subtask, result, goal, previous_results)
+        print(f"[Verifier] Evidence Grounding: {evidence_result.status.upper()} - {evidence_result.reason}")
+
+        failures = [
+            check for check in (numeric_result, evidence_result)
+            if check.status == "failed"
+        ]
+        if failures:
+            return VerificationResult(
+                status="failed",
+                method="numeric+grounding",
+                reason=" | ".join(
+                    f"[{f.method}] {f.reason}" for f in failures
+                ),
+            )
+        return VerificationResult(
+            status="passed",
+            method="numeric+grounding",
+            reason="Numeric and Evidence Grounding checks passed (MEDIUM risk).",
+        )
+
+    # -------------------------------------------------------------------- LOW
+    # tier == "low"
+    print(f"[Verifier] Risk Tier: LOW — running Numeric Re-Check only (no LLM calls)")
+
+    print("[Verifier] Running Numeric Re-Check...")
+    numeric_result = numeric_recheck(subtask, result)
+    print(f"[Verifier] Numeric Re-Check: {numeric_result.status.upper()} - {numeric_result.reason}")
+
+    if numeric_result.status == "failed":
+        return VerificationResult(
+            status="failed",
+            method="numeric_recheck",
+            reason=f"[numeric_recheck] {numeric_result.reason}",
+        )
+
+    return VerificationResult(
+        status="passed",
+        method="numeric_recheck",
+        reason="Numeric Re-Check passed (LOW risk — LLM checks skipped).",
+    )

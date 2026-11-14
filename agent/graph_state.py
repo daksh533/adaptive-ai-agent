@@ -58,3 +58,5 @@ class GraphState(TypedDict):
     replan_attempts: int
     is_done: bool
     agent_status: str
+    risk_level: str  # Phase 10: "low" | "medium" | "high" — set by RiskClassifier
+    verification_mode: str  # Phase 11: "baseline" | "fixed" | "adaptive"

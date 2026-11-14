@@ -1,0 +1,79 @@
+{
+  "configurations": {
+    "baseline": {
+      "configuration": "baseline",
+      "total_tasks": 1,
+      "successful_tasks": 1,
+      "failed_tasks": 0,
+      "success_rate_pct": 100.0,
+      "total_latency_seconds": 4.33,
+      "mean_latency_seconds": 4.33,
+      "total_steps_executed": 1,
+      "total_verification_calls": 0,
+      "total_corrections_attempted": 0,
+      "total_error_recoveries": 0,
+      "error_recovery_rate_pct": 100.0,
+      "efficiency_ratio": 23.09,
+      "runs": [
+        {
+          "task_id": "TEST_01",
+          "task_category": "Test Category",
+          "configuration": "baseline",
+          "success": true,
+          "latency_seconds": 4.33,
+          "total_steps": 1,
+          "completed_steps": 1,
+          "verification_calls_count": 0,
+          "verification_checks_detail": {
+            "low_risk_runs": 0,
+            "medium_risk_runs": 0,
+            "high_risk_runs": 0,
+            "baseline_skips": 1
+          },
+          "correction_attempts_count": 0,
+          "replan_count": 0,
+          "error_recovery_successes": 0,
+          "error_message": ""
+        }
+      ]
+    },
+    "adaptive": {
+      "configuration": "adaptive",
+      "total_tasks": 1,
+      "successful_tasks": 1,
+      "failed_tasks": 0,
+      "success_rate_pct": 100.0,
+      "total_latency_seconds": 11.28,
+      "mean_latency_seconds": 11.28,
+      "total_steps_executed": 1,
+      "total_verification_calls": 2,
+      "total_corrections_attempted": 0,
+      "total_error_recoveries": 0,
+      "error_recovery_rate_pct": 100.0,
+      "efficiency_ratio": 8.87,
+      "runs": [
+        {
+          "task_id": "TEST_01",
+          "task_category": "Test Category",
+          "configuration": "adaptive",
+          "success": true,
+          "latency_seconds": 11.28,
+          "total_steps": 1,
+          "completed_steps": 1,
+          "verification_calls_count": 2,
+          "verification_checks_detail": {
+            "low_risk_runs": 0,
+            "medium_risk_runs": 0,
+            "high_risk_runs": 1,
+            "baseline_skips": 0
+          },
+          "correction_attempts_count": 0,
+          "replan_count": 0,
+          "error_recovery_successes": 0,
+          "error_message": ""
+        }
+      ]
+    }
+  },
+  "timestamp": 1794692195.2169309
+}

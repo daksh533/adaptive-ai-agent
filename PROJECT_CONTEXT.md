@@ -174,6 +174,55 @@ Triggered when a subtask exhausts its 2 correction attempts without passing:
 
 ---
 
+### Phase 10: Adaptive Risk-Based Verification — ✅ Complete
+* **Problem**: In Phase 6, the agent unconditionally executes full 3-way verification on every single subtask. For trivial steps (simple text formatting, direct quotes), this wastes tokens, increases latency, and risks hitting API rate limits.
+* **Solution**: Introduces an intelligent **Risk Classifier** (`verification/risk_classifier.py`) before the Verifier. The agent dynamically scales verification depth based on subtask criticality:
+  * **LOW-Risk** (formatting, simple text, summarisation — no math, no external facts): `numeric_recheck` only → **0 LLM calls**.
+  * **MEDIUM-Risk** (factual lookup, web / RAG citations required): `numeric_recheck` + `evidence_grounding_check` → **1 LLM call**.
+  * **HIGH-Risk** (arithmetic calculations, financial figures, multi-step numeric dependencies): Full 3-way verification → **2 LLM calls** (same as Phase 6).
+* **Key Files**:
+  * `verification/risk_classifier.py` — NEW: `classify_risk(subtask, result)` → `{risk_level, reason}`. LLM call at temperature=0; fallback defaults to `"high"`.
+  * `verification/verifier.py` — NEW function: `verify_step_adaptive(subtask, result, goal, previous_results, risk_level)`. Original `verify_step()` kept intact for backward compatibility.
+  * `agent/graph.py` — `verifier_node` now calls `classify_risk()` then `verify_step_adaptive()`.
+  * `agent/graph_state.py` — Added `risk_level: str` field.
+  * `agent/loop.py` — Initial state includes `"risk_level": "high"` (conservative default).
+* **Status**: Implementation complete, all 7 Phase 10 tests passing.
+
+### Phase 11: Empirical Benchmarking & Comparative Evaluation — ✅ Complete
+* **Objective**: Experimentally demonstrate the effectiveness, error recovery rate, and computational efficiency of the adaptive self-correcting agent against standard architectures.
+* **Configurations Evaluated**:
+  1. *Baseline Configuration*: Standard ReAct/Plan-and-Solve agent with zero verification and no self-correction (`mode="baseline"`).
+  2. *Fixed Self-Correcting Configuration (Phase 9)*: Full verification and error recovery executed unconditionally on every subtask (`mode="fixed"`).
+  3. *Adaptive Self-Correcting Configuration (Phase 10)*: Risk-gated verification dynamically scaling inspection depth (`mode="adaptive"`).
+* **Key Evaluation Metrics**:
+  * **Task Success Rate (%)**: Percentage of benchmark tasks completed accurately end-to-end.
+  * **Error Recovery Rate (%)**: Frequency with which detected failures are successfully remediated into valid outputs.
+  * **Latency (seconds)**: End-to-end wall-clock execution time.
+  * **Verification Calls Count & Overhead**: Total LLM token usage and verification call frequency per configuration.
+  * **Efficiency Ratio**: Accuracy gains relative to verification computational overhead (`success_rate / mean_latency`).
+* **Key Files**:
+  * `benchmark/benchmark_tasks.py` — Standardized benchmark task suite across Math, RAG, Web Research, Formatting, and Recovery (`BENCHMARK_TASKS`).
+  * `benchmark/metrics.py` — `BenchmarkMetrics` and `RunResult` data models for academic metrics collection.
+  * `benchmark/evaluator.py` — `BenchmarkEvaluator` automating comparative execution, ASCII table generation, JSON (`benchmark_report.json`), and Markdown (`benchmark_report.md`) exports.
+  * `run_benchmark.py` — CLI runner supporting `--configs`, `--task`, and `--delay`.
+  * `test_phase_11.py` — Comprehensive unit and integration test suite (5/5 passing).
+
+### Phase 12: Interactive Visual Web UI Dashboard
+* **Objective**: Provide a modern, intuitive, and responsive web interface so users and evaluators can interact with the agent visually rather than through terminal logs alone.
+* **Key Capabilities & Architecture**:
+  * **Interactive Goal Input**: User prompt submission with preset demonstration prompts (math, research, crypto, RAG-lookup).
+  * **Real-Time Execution & Graph Trace**: Live visual display of the active LangGraph node (Planner $\to$ Executor $\to$ Verifier $\to$ Diagnoser $\to$ Corrector $\to$ Replanner).
+  * **Per-Step Verification Status Badges**: Clean UI indicators displaying `[PASS]`, `[FAILED]`, and diagnostic reasons for Numeric, Grounding, and Consistency checks.
+  * **Self-Correction & Tool Inspector**: Expandable drawers showing raw tool calls (`calculate`, `run_python`, `knowledge_lookup`), source citations (ChromaDB document chunks vs. live web URLs), error classifications, and correction diffs.
+  * **Dynamic Plan Timeline**: Real-time progress bar and timeline displaying completed subtasks, actively running steps, and revised remaining plans after replanning.
+
+### Phase 13: Research Paper & Thesis Defense
+* **Academic Deliverable**: Capstone research project for MCA in Artificial Intelligence & Machine Learning at IILM University, Greater Noida (Academic Year: 2026).
+* **Authors**: Daksh, Tarkeshwar Kumar Yadav, Abhinav Sharma.
+* **Deliverables**: Comprehensive academic research paper detailing system architecture, error taxonomy, experimental benchmarks, comparative evaluation graphs, live web UI demo, and thesis presentation.
+
+---
+
 ## 5. File & Directory Reference Map
 
 | Path | Purpose |

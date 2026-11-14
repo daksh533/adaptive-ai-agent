@@ -14,12 +14,13 @@ from agent.graph_state import GraphState
 _graph = build_graph()
 
 
-def run_agent(goal: str) -> GraphState:
+def run_agent(goal: str, mode: str = "adaptive") -> GraphState:
     """
     Run the complete multi-step agent for a given goal.
 
     Args:
         goal: The user's natural-language task description.
+        mode: "adaptive" (Phase 10, default) | "fixed" (Phase 9) | "baseline" (Phase 3/11)
 
     Returns:
         The final GraphState after all subtasks are verified or the agent
@@ -30,6 +31,7 @@ def run_agent(goal: str) -> GraphState:
             state["results_so_far"]      – execution + verification history
             state["verification_status"] – status of the last verification
             state["agent_status"]        – "completed" | "failed"
+            state["verification_mode"]   – operating configuration
     """
     initial_state: GraphState = {
         "goal": goal,
@@ -43,6 +45,8 @@ def run_agent(goal: str) -> GraphState:
         "replan_attempts": 0,
         "is_done": False,
         "agent_status": "running",
+        "risk_level": "high",   # Phase 10: conservative default
+        "verification_mode": mode,  # Phase 11: "baseline" | "fixed" | "adaptive"
     }
 
     print(f"\n{'=' * 50}")
