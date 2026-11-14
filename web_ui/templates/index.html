@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Adaptive Self-Correcting AI Agent</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { background: #0f1117; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #1a1d27; }
+    ::-webkit-scrollbar-thumb { background: #3b4068; border-radius: 3px; }
+
+    /* Terminal log */
+    #log-box {
+      font-family: 'Courier New', monospace;
+      font-size: 0.78rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    /* Pulse animation for active badge */
+    @keyframes pulse-ring {
+      0%   { box-shadow: 0 0 0 0 rgba(99,102,241,0.6); }
+      70%  { box-shadow: 0 0 0 8px rgba(99,102,241,0); }
+      100% { box-shadow: 0 0 0 0 rgba(99,102,241,0); }
+    }
+    .pulse { animation: pulse-ring 1.5s infinite; }
+
+    /* Step card animation */
+    .step-enter { animation: fadeSlide 0.35s ease; }
+    @keyframes fadeSlide {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Log line coloring */
+    .log-planner   { color: #818cf8; }
+    .log-executor  { color: #34d399; }
+    .log-verifier  { color: #fbbf24; }
+    .log-risk      { color: #a78bfa; }
+    .log-corrector { color: #fb923c; }
+    .log-replanner { color: #f472b6; }
+    .log-error     { color: #f87171; }
+    .log-default   { color: #94a3b8; }
+  </style>
+</head>
+<body class="min-h-screen text-gray-100">
+
+  <!-- ───────────── HEADER ───────────── -->
+  <header class="border-b border-gray-800 bg-gray-900/80 backdrop-blur sticky top-0 z-10">
+    <div class="max-w-7xl mx-auto px-6 py-4 flex items-center gap-4">
+      <div class="w-9 h-9 rounded-lg bg-indigo-600 flex items-center justify-center text-xl">🤖</div>
+      <div>
+        <h1 class="font-bold text-white text-lg leading-tight">Adaptive Self-Correcting AI Agent</h1>
+        <p class="text-xs text-gray-400">MCA Capstone · IILM University · Phases 1–11 Active</p>
+      </div>
+      <div class="ml-auto flex items-center gap-2 text-xs">
+        <span class="px-2 py-1 rounded bg-indigo-900/60 text-indigo-300 border border-indigo-700">LangGraph</span>
+        <span class="px-2 py-1 rounded bg-emerald-900/60 text-emerald-300 border border-emerald-700">ChromaDB</span>
+        <span class="px-2 py-1 rounded bg-amber-900/60 text-amber-300 border border-amber-700">Groq API</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-6 py-6 grid grid-cols-1 xl:grid-cols-5 gap-6">
+
+    <!-- ───────────── LEFT PANEL: Input & Steps ───────────── -->
+    <section class="xl:col-span-2 flex flex-col gap-5">
+
+      <!-- Goal Input Card -->
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+        <h2 class="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+          <span class="text-indigo-400">◆</span> Goal Input
+        </h2>
+
+        <!-- Preset prompts -->
+        <div class="mb-3">
+          <p class="text-xs text-gray-500 mb-2">Quick Presets</p>
+          <div class="flex flex-wrap gap-2">
+            <button class="preset-btn text-xs px-3 py-1 rounded-full bg-gray-800 hover:bg-indigo-800 border border-gray-700 hover:border-indigo-500 transition text-gray-300"
+              data-goal="Calculate 15% of 800, then add 50 and multiply the result by 2.">
+              🔢 Math Chain
+            </button>
+            <button class="preset-btn text-xs px-3 py-1 rounded-full bg-gray-800 hover:bg-indigo-800 border border-gray-700 hover:border-indigo-500 transition text-gray-300"
+              data-goal="Research the population of Tokyo and New York City, calculate their combined total, find what percentage Tokyo makes up, and summarize in a paragraph.">
+              🌍 Research + Math
+            </button>
+            <button class="preset-btn text-xs px-3 py-1 rounded-full bg-gray-800 hover:bg-indigo-800 border border-gray-700 hover:border-indigo-500 transition text-gray-300"
+              data-goal="Look up the project error taxonomy from the knowledge base and list the 6 error classes.">
+              📚 RAG Lookup
+            </button>
+            <button class="preset-btn text-xs px-3 py-1 rounded-full bg-gray-800 hover:bg-indigo-800 border border-gray-700 hover:border-indigo-500 transition text-gray-300"
+              data-goal="Format these names alphabetically and add descriptions: Aristotle, Zeno, Plato.">
+              📝 Formatting
+            </button>
+          </div>
+        </div>
+
+        <textarea id="goal-input" rows="3"
+          class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-indigo-500 resize-none transition"
+          placeholder="Enter your goal here…"></textarea>
+
+        <!-- Mode selector -->
+        <div class="mt-3 mb-4">
+          <p class="text-xs text-gray-500 mb-2">Verification Mode</p>
+          <div class="flex gap-2">
+            <label class="mode-label flex items-center gap-2 text-xs cursor-pointer px-3 py-2 rounded-lg border border-gray-700 hover:border-gray-500 transition">
+              <input type="radio" name="mode" value="adaptive" checked class="accent-indigo-500" />
+              <span>
+                <span class="text-indigo-300 font-semibold">Adaptive</span>
+                <span class="text-gray-500 block">Dynamic risk tiers</span>
+              </span>
+            </label>
+            <label class="mode-label flex items-center gap-2 text-xs cursor-pointer px-3 py-2 rounded-lg border border-gray-700 hover:border-gray-500 transition">
+              <input type="radio" name="mode" value="fixed" class="accent-amber-500" />
+              <span>
+                <span class="text-amber-300 font-semibold">Fixed</span>
+                <span class="text-gray-500 block">Full 3-way verify</span>
+              </span>
+            </label>
+            <label class="mode-label flex items-center gap-2 text-xs cursor-pointer px-3 py-2 rounded-lg border border-gray-700 hover:border-gray-500 transition">
+              <input type="radio" name="mode" value="baseline" class="accent-gray-400" />
+              <span>
+                <span class="text-gray-300 font-semibold">Baseline</span>
+                <span class="text-gray-500 block">No verification</span>
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <button id="run-btn"
+          class="w-full bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-semibold text-sm py-3 rounded-lg transition flex items-center justify-center gap-2">
+          <span id="run-btn-icon">▶</span>
+          <span id="run-btn-text">Run Agent</span>
+        </button>
+      </div>
+
+      <!-- Plan & Steps Card -->
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 flex-1">
+        <h2 class="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+          <span class="text-emerald-400">◆</span> Execution Plan
+          <span id="agent-status-badge" class="ml-auto text-xs px-2 py-0.5 rounded-full bg-gray-800 text-gray-400 border border-gray-700">Idle</span>
+        </h2>
+        <div id="steps-container" class="flex flex-col gap-2 min-h-20">
+          <p class="text-xs text-gray-600 italic">Steps will appear here after the agent creates its plan…</p>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ───────────── RIGHT PANEL: Live Log ───────────── -->
+    <section class="xl:col-span-3 flex flex-col gap-5">
+
+      <!-- Live Terminal Log -->
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 flex flex-col" style="min-height: 480px; max-height: 600px;">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-semibold text-gray-300 flex items-center gap-2">
+            <span class="text-amber-400">◆</span> Live Execution Log
+            <span id="log-spinner" class="hidden w-3 h-3 border-2 border-indigo-500 border-t-transparent rounded-full" style="animation: spin 0.8s linear infinite;"></span>
+          </h2>
+          <button id="clear-btn" class="text-xs text-gray-500 hover:text-gray-300 transition">Clear</button>
+        </div>
+        <div class="bg-black/40 rounded-lg p-4 flex-1 overflow-y-auto" id="log-scroll">
+          <div id="log-box">
+            <span class="log-default">Waiting for goal submission…</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Results Summary -->
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+        <h2 class="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
+          <span class="text-pink-400">◆</span> Verification Results
+        </h2>
+        <div id="results-container">
+          <p class="text-xs text-gray-600 italic">Verification results will appear after each step completes…</p>
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <!-- Spin animation via inline style -->
+  <style>
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+
+  <script>
+    // ─────────────── State ───────────────
+    let currentEventSource = null;
+    let stepStatuses = {};
+    let currentPlan = [];
+
+    // ─────────────── Preset Buttons ───────────────
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.getElementById('goal-input').value = btn.dataset.goal;
+      });
+    });
+
+    document.getElementById('clear-btn').addEventListener('click', () => {
+      document.getElementById('log-box').innerHTML = '<span class="log-default">Log cleared.</span>';
+    });
+
+    // ─────────────── Log rendering ───────────────
+    function logLine(text) {
+      const box = document.getElementById('log-box');
+      const scroll = document.getElementById('log-scroll');
+      const span = document.createElement('span');
+
+      let cls = 'log-default';
+      if (text.includes('[Planner]'))       cls = 'log-planner';
+      else if (text.includes('[Executor]')) cls = 'log-executor';
+      else if (text.includes('[Verifier]')) cls = 'log-verifier';
+      else if (text.includes('[RiskClassifier]')) cls = 'log-risk';
+      else if (text.includes('[Corrector]'))cls = 'log-corrector';
+      else if (text.includes('[Replanner]'))cls = 'log-replanner';
+      else if (text.includes('Error') || text.includes('FAILED') || text.includes('error')) cls = 'log-error';
+
+      span.className = cls;
+      span.textContent = text + '\n';
+      box.appendChild(span);
+      scroll.scrollTop = scroll.scrollHeight;
+    }
+
+    // ─────────────── Status Badge ───────────────
+    function setStatusBadge(text, color) {
+      const badge = document.getElementById('agent-status-badge');
+      badge.textContent = text;
+      badge.className = `ml-auto text-xs px-2 py-0.5 rounded-full border ${color}`;
+    }
+
+    // ─────────────── Step Cards ───────────────
+    function renderPlan(plan) {
+      currentPlan = plan;
+      const container = document.getElementById('steps-container');
+      container.innerHTML = '';
+      plan.forEach((step, i) => {
+        const card = document.createElement('div');
+        card.id = `step-${i}`;
+        card.className = 'step-enter flex items-start gap-3 p-3 rounded-lg bg-gray-800/50 border border-gray-700';
+        card.innerHTML = `
+          <div class="w-6 h-6 rounded-full bg-gray-700 border border-gray-600 flex items-center justify-center text-xs font-bold text-gray-400 shrink-0 mt-0.5">${i + 1}</div>
+          <div class="flex-1 min-w-0">
+            <p class="text-xs text-gray-300 leading-relaxed">${escapeHtml(step)}</p>
+            <div id="step-status-${i}" class="mt-1"></div>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function updateStep(index, status, reason) {
+      const card = document.getElementById(`step-${index}`);
+      if (!card) return;
+
+      const numEl = card.querySelector('div.w-6');
+      const statusEl = document.getElementById(`step-status-${index}`);
+
+      if (status === 'passed') {
+        card.className = 'step-enter flex items-start gap-3 p-3 rounded-lg bg-emerald-900/20 border border-emerald-800/50';
+        numEl.className = 'w-6 h-6 rounded-full bg-emerald-700 border border-emerald-500 flex items-center justify-center text-xs font-bold text-white shrink-0 mt-0.5';
+        numEl.textContent = '✓';
+        statusEl.innerHTML = `<span class="text-xs text-emerald-400">✅ ${escapeHtml(reason || 'Passed')}</span>`;
+      } else if (status === 'failed') {
+        card.className = 'step-enter flex items-start gap-3 p-3 rounded-lg bg-red-900/20 border border-red-800/50';
+        numEl.className = 'w-6 h-6 rounded-full bg-red-700 border border-red-500 flex items-center justify-center text-xs font-bold text-white shrink-0 mt-0.5';
+        numEl.textContent = '✗';
+        statusEl.innerHTML = `<span class="text-xs text-red-400">❌ ${escapeHtml(reason || 'Failed')}</span>`;
+      }
+    }
+
+    // ─────────────── Results Panel ───────────────
+    function renderResults(results) {
+      const container = document.getElementById('results-container');
+      container.innerHTML = '';
+
+      results.forEach((r, i) => {
+        const passed = r.verification_status === 'passed';
+        const riskMatch = (r.verification_reason || '').match(/risk tier: (low|medium|high)/i);
+        const riskTier = riskMatch ? riskMatch[1].toUpperCase() : null;
+
+        const riskBadge = riskTier
+          ? `<span class="text-xs px-1.5 py-0.5 rounded font-semibold ${riskTier === 'LOW' ? 'bg-blue-900/60 text-blue-300' : riskTier === 'MEDIUM' ? 'bg-amber-900/60 text-amber-300' : 'bg-red-900/60 text-red-300'}">${riskTier}</span>`
+          : '';
+
+        const card = document.createElement('div');
+        card.className = `mb-3 p-3 rounded-lg border ${passed ? 'bg-emerald-900/10 border-emerald-800/40' : 'bg-red-900/10 border-red-800/40'}`;
+        card.innerHTML = `
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-xs font-semibold ${passed ? 'text-emerald-400' : 'text-red-400'}">${passed ? '✅ PASSED' : '❌ FAILED'} — Step ${i + 1}</span>
+            ${riskBadge}
+          </div>
+          <p class="text-xs text-gray-400 mb-1"><span class="text-gray-500">Task:</span> ${escapeHtml(r.step)}</p>
+          <p class="text-xs text-gray-500">${escapeHtml(r.verification_reason || '')}</p>
+        `;
+        container.appendChild(card);
+
+        // Also update the step card
+        updateStep(i, r.verification_status, r.verification_reason);
+      });
+    }
+
+    // ─────────────── Run ───────────────
+    document.getElementById('run-btn').addEventListener('click', async () => {
+      const goal = document.getElementById('goal-input').value.trim();
+      if (!goal) return;
+
+      const mode = document.querySelector('input[name="mode"]:checked').value;
+
+      // Reset UI
+      document.getElementById('log-box').innerHTML = '';
+      document.getElementById('steps-container').innerHTML = '<p class="text-xs text-gray-600 italic">Planning…</p>';
+      document.getElementById('results-container').innerHTML = '<p class="text-xs text-gray-600 italic">Waiting for execution…</p>';
+      setStatusBadge('Running…', 'bg-indigo-900/60 text-indigo-300 border-indigo-700');
+
+      const btn = document.getElementById('run-btn');
+      btn.disabled = true;
+      document.getElementById('run-btn-text').textContent = 'Running…';
+      document.getElementById('run-btn-icon').textContent = '⏳';
+      document.getElementById('log-spinner').classList.remove('hidden');
+
+      if (currentEventSource) { currentEventSource.close(); }
+
+      // Start run
+      const resp = await fetch('/api/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ goal, mode }),
+      });
+      const { run_id } = await resp.json();
+
+      // Stream events
+      const es = new EventSource(`/api/stream/${run_id}`);
+      currentEventSource = es;
+
+      es.addEventListener('log', e => {
+        const { text } = JSON.parse(e.data);
+        logLine(text);
+
+        // Extract plan from planner log lines
+        const planMatch = text.match(/^\s+(\d+)\.\s+(.+)$/);
+        if (planMatch && text.match(/  \d+\./)) {
+          // Will be overwritten by the complete event which has the proper plan
+        }
+      });
+
+      es.addEventListener('status', e => {
+        const { text } = JSON.parse(e.data);
+        logLine('→ ' + text);
+      });
+
+      es.addEventListener('complete', e => {
+        const data = JSON.parse(e.data);
+        renderPlan(data.plan || []);
+        renderResults(data.results || []);
+
+        const success = data.agent_status === 'completed';
+        setStatusBadge(
+          success ? '✅ Completed' : '❌ Failed',
+          success
+            ? 'bg-emerald-900/60 text-emerald-300 border-emerald-700'
+            : 'bg-red-900/60 text-red-300 border-red-700'
+        );
+
+        btn.disabled = false;
+        document.getElementById('run-btn-text').textContent = 'Run Agent';
+        document.getElementById('run-btn-icon').textContent = '▶';
+        document.getElementById('log-spinner').classList.add('hidden');
+        es.close();
+      });
+
+      es.addEventListener('error', e => {
+        try {
+          const { text } = JSON.parse(e.data);
+          logLine('ERROR: ' + text);
+        } catch { }
+        setStatusBadge('Error', 'bg-red-900/60 text-red-300 border-red-700');
+        btn.disabled = false;
+        document.getElementById('run-btn-text').textContent = 'Run Agent';
+        document.getElementById('run-btn-icon').textContent = '▶';
+        document.getElementById('log-spinner').classList.add('hidden');
+        es.close();
+      });
+
+      es.addEventListener('done', () => { es.close(); });
+    });
+
+    function escapeHtml(text) {
+      return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    }
+  </script>
+
+</body>
+</html>
