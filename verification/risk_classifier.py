@@ -37,10 +37,11 @@ RISK_TIERS = {"low", "medium", "high"}
 # Keywords that strongly indicate HIGH risk (arithmetic / financial)
 _HIGH_KEYWORDS = re.compile(
     r"\b("
-    r"calculat|comput|arithmetic|percent|%|math|sum|total|add|subtract|multiply|divide"
+    r"calculate|calculation|calculator|computing|compute|arithmetic|percent|percentage"
+    r"|math|sum|total|add|addition|subtract|subtraction|multiply|multiplication|divide|division"
     r"|financial|profit|loss|revenue|cost|budget|price|amount|figure|equation"
     r"|=\s*\d|result is \d|\d\s*\+\s*\d|\d\s*-\s*\d|\d\s*\*\s*\d|\d\s*/\s*\d"
-    r")\b",
+    r")\b|%",
     re.IGNORECASE,
 )
 
@@ -54,11 +55,13 @@ _MEDIUM_KEYWORDS = re.compile(
     re.IGNORECASE,
 )
 
-# Keywords that strongly indicate LOW risk (formatting / summarisation)
+# Keywords that strongly indicate LOW risk (formatting / summarisation / code / programming / general)
 _LOW_KEYWORDS = re.compile(
     r"\b("
     r"format|summariz|summarise|rewrite|list|bullet|paragraph|introduc"
-    r"|present|organiz|restructur|rephrase|section|heading|title"
+    r"|present|organiz|restructur|rephrase|section|heading|title|display"
+    r"|code|script|python|program|function|def\b|class\b|loop|import\b"
+    r"|fibonacci|print|algorithm|string|sort\b|array|explain|generate"
     r")\b",
     re.IGNORECASE,
 )
@@ -81,7 +84,7 @@ _SYSTEM_PROMPT = (
 def _rule_classify(subtask: str, result: str) -> str | None:
     """
     Try to determine risk tier from keywords alone.
-    Returns "low" / "medium" / "high", or None if ambiguous.
+    Returns "low" / "medium" / "high", avoiding expensive LLM calls.
     """
     combined = subtask + " " + result
 
@@ -97,7 +100,11 @@ def _rule_classify(subtask: str, result: str) -> str | None:
     if low_score > 0 and high_score == 0 and medium_score == 0:
         return "low"
 
-    return None   # ambiguous — let the LLM decide
+    # If neither arithmetic nor search keywords exist, it is a safe standard/code task (LOW risk)
+    if high_score == 0 and medium_score == 0:
+        return "low"
+
+    return "high" if high_score > 0 else "medium"
 
 
 # ---------------------------------------------------------------------------
@@ -125,7 +132,7 @@ def classify_risk(subtask: str, result: str) -> dict:
     rule_tier = _rule_classify(subtask, result)
     if rule_tier is not None:
         reason_map = {
-            "low":    "Keyword rules: purely formatting/summarisation task.",
+            "low":    "Keyword rules: formatting, coding, or standard non-arithmetic task.",
             "medium": "Keyword rules: factual lookup or retrieval required.",
             "high":   "Keyword rules: arithmetic or numeric calculation detected.",
         }

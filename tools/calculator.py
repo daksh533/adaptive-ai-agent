@@ -1,6 +1,7 @@
 import ast
 import math
 import operator
+import re
 
 # Allowed operators
 _OPERATORS = {
@@ -72,7 +73,16 @@ def _eval_node(node):
 
 def calculate(expression: str):
     try:
-        tree = ast.parse(expression, mode="eval")
+        expr = str(expression).strip()
+        # commas in numbers: 10,000 -> 10000
+        expr = re.sub(r"(\d+),(\d+)", r"\1\2", expr)
+        # X% of Y -> (X / 100) * Y
+        expr = re.sub(r"(\d+(?:\.\d+)?)\s*%\s*of\s*(\d+(?:\.\d+)?)", r"(\1 / 100) * \2", expr, flags=re.I)
+        # standalone X% -> (X / 100)
+        expr = re.sub(r"(\d+(?:\.\d+)?)\s*%", r"(\1 / 100)", expr)
+        # unicode & alternative operators
+        expr = expr.replace("^", "**").replace("×", "*").replace("÷", "/")
+        tree = ast.parse(expr, mode="eval")
         result = _eval_node(tree.body)
         return result
     except ZeroDivisionError:

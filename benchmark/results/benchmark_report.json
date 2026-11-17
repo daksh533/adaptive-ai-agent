@@ -1,0 +1,336 @@
+{
+  "configurations": {
+    "baseline": {
+      "configuration": "baseline",
+      "total_tasks": 5,
+      "successful_tasks": 4,
+      "failed_tasks": 1,
+      "success_rate_pct": 80.0,
+      "total_latency_seconds": 240.3,
+      "mean_latency_seconds": 48.06,
+      "total_steps_executed": 15,
+      "total_verification_calls": 0,
+      "total_corrections_attempted": 0,
+      "total_error_recoveries": 0,
+      "error_recovery_rate_pct": 0.0,
+      "efficiency_ratio": 1.66,
+      "runs": [
+        {
+          "task_id": "MATH_01",
+          "task_category": "Arithmetic / High Risk",
+          "configuration": "baseline",
+          "success": true,
+          "latency_seconds": 10.3,
+          "total_steps": 3,
+          "completed_steps": 3,
+          "verification_calls_count": 0,
+          "verification_checks_detail": {
+            "low_risk_runs": 0,
+            "medium_risk_runs": 0,
+            "high_risk_runs": 0,
+            "baseline_skips": 3
+          },
+          "correction_attempts_count": 0,
+          "replan_count": 0,
+          "error_recovery_successes": 0,
+          "error_message": ""
+        },
+        {
+          "task_id": "RAG_01",
+          "task_category": "Knowledge Base Grounding / Medium Risk",
+          "configuration": "baseline",
+          "success": true,
+          "latency_seconds": 108.66,
+          "total_steps": 2,
+          "completed_steps": 2,
+          "verification_calls_count": 0,
+          "verification_checks_detail": {
+            "low_risk_runs": 0,
+            "medium_risk_runs": 0,
+            "high_risk_runs": 0,
+            "baseline_skips": 2
+          },
+          "correction_attempts_count": 0,
+          "replan_count": 0,
+          "error_recovery_successes": 0,
+          "error_message": ""
+        },
+        {
+          "task_id": "FORMAT_01",
+          "task_category": "Formatting / Low Risk",
+          "configuration": "baseline",
+          "success": false,
+          "latency_seconds": 31.91,
+          "total_steps": 3,
+          "completed_steps": 3,
+          "verification_calls_count": 0,
+          "verification_checks_detail": {
+            "low_risk_runs": 0,
+            "medium_risk_runs": 0,
+            "high_risk_runs": 0,
+            "baseline_skips": 3
+          },
+          "correction_attempts_count": 0,
+          "replan_count": 0,
+          "error_recovery_successes": 0,
+          "error_message": ""
+        },
+        {
+          "task_id": "RESEARCH_01",
+          "task_category": "Web Research & Math / Hybrid Risk",
+          "configuration": "baseline",
+          "success": true,
+          "latency_seconds": 67.27,
+          "total_steps": 4,
+          "completed_steps": 4,
+          "verification_calls_count": 0,
+          "verification_checks_detail": {
+            "low_risk_runs": 0,
+            "medium_risk_runs": 0,
+            "high_risk_runs": 0,
+            "baseline_skips": 4
+          },
+          "correction_attempts_count": 0,
+          "replan_count": 0,
+          "error_recovery_successes": 0,
+          "error_message": ""
+        },
+        {
+          "task_id": "RECOVERY_01",
+          "task_category": "Error Recovery & Invalidation",
+          "configuration": "baseline",
+          "success": true,
+          "latency_seconds": 22.16,
+          "total_steps": 3,
+          "completed_steps": 3,
+          "verification_calls_count": 0,
+          "verification_checks_detail": {
+            "low_risk_runs": 0,
+            "medium_risk_runs": 0,
+            "high_risk_runs": 0,
+            "baseline_skips": 3
+          },
+          "correction_attempts_count": 0,
+          "replan_count": 0,
+          "error_recovery_successes": 0,
+          "error_message": ""
+        }
+      ]
+    },
+    "fixed": {
+      "configuration": "fixed",
+      "total_tasks": 5,
+      "successful_tasks": 5,
+      "failed_tasks": 0,
+      "success_rate_pct": 100.0,
+      "total_latency_seconds": 370.5,
+      "mean_latency_seconds": 74.1,
+      "total_steps_executed": 15,
+      "total_verification_calls": 30,
+      "total_corrections_attempted": 1,
+      "total_error_recoveries": 1,
+      "error_recovery_rate_pct": 100.0,
+      "efficiency_ratio": 1.35,
+      "runs": [
+        {
+          "task_id": "MATH_01",
+          "task_category": "Arithmetic / High Risk",
+          "configuration": "fixed",
+          "success": true,
+          "latency_seconds": 31.8,
+          "total_steps": 3,
+          "completed_steps": 3,
+          "verification_calls_count": 6,
+          "verification_checks_detail": {
+            "low_risk_runs": 0,
+            "medium_risk_runs": 0,
+            "high_risk_runs": 3,
+            "baseline_skips": 0
+          },
+          "correction_attempts_count": 0,
+          "replan_count": 0,
+          "error_recovery_successes": 0,
+          "error_message": ""
+        },
+        {
+          "task_id": "RAG_01",
+          "task_category": "Knowledge Base Grounding / Medium Risk",
+          "configuration": "fixed",
+          "success": true,
+          "latency_seconds": 101.03,
+          "total_steps": 2,
+          "completed_steps": 2,
+          "verification_calls_count": 4,
+          "verification_checks_detail": {
+            "low_risk_runs": 0,
+            "medium_risk_runs": 0,
+            "high_risk_runs": 2,
+            "baseline_skips": 0
+          },
+          "correction_attempts_count": 0,
+          "replan_count": 0,
+          "error_recovery_successes": 0,
+          "error_message": ""
+        },
+        {
+          "task_id": "FORMAT_01",
+          "task_category": "Formatting / Low Risk",
+          "configuration": "fixed",
+          "success": true,
+          "latency_seconds": 29.01,
+          "total_steps": 2,
+          "completed_steps": 2,
+          "verification_calls_count": 4,
+          "verification_checks_detail": {
+            "low_risk_runs": 0,
+            "medium_risk_runs": 0,
+            "high_risk_runs": 2,
+            "baseline_skips": 0
+          },
+          "correction_attempts_count": 0,
+          "replan_count": 0,
+          "error_recovery_successes": 0,
+          "error_message": ""
+        },
+        {
+          "task_id": "RESEARCH_01",
+          "task_category": "Web Research & Math / Hybrid Risk",
+          "configuration": "fixed",
+          "success": true,
+          "latency_seconds": 161.34,
+          "total_steps": 5,
+          "completed_steps": 5,
+          "verification_calls_count": 10,
+          "verification_checks_detail": {
+            "low_risk_runs": 0,
+            "medium_risk_runs": 0,
+            "high_risk_runs": 5,
+            "baseline_skips": 0
+          },
+          "correction_attempts_count": 1,
+          "replan_count": 0,
+          "error_recovery_successes": 1,
+          "error_message": ""
+        },
+        {
+          "task_id": "RECOVERY_01",
+          "task_category": "Error Recovery & Invalidation",
+          "configuration": "fixed",
+          "success": true,
+          "latency_seconds": 47.32,
+          "total_steps": 3,
+          "completed_steps": 3,
+          "verification_calls_count": 6,
+          "verification_checks_detail": {
+            "low_risk_runs": 0,
+            "medium_risk_runs": 0,
+            "high_risk_runs": 3,
+            "baseline_skips": 0
+          },
+          "correction_attempts_count": 0,
+          "replan_count": 0,
+          "error_recovery_successes": 0,
+          "error_message": ""
+        }
+      ]
+    },
+    "adaptive": {
+      "configuration": "adaptive",
+      "total_tasks": 4,
+      "successful_tasks": 2,
+      "failed_tasks": 2,
+      "success_rate_pct": 50.0,
+      "total_latency_seconds": 291.26,
+      "mean_latency_seconds": 72.81,
+      "total_steps_executed": 10,
+      "total_verification_calls": 12,
+      "total_corrections_attempted": 2,
+      "total_error_recoveries": 1,
+      "error_recovery_rate_pct": 50.0,
+      "efficiency_ratio": 0.69,
+      "runs": [
+        {
+          "task_id": "MATH_01",
+          "task_category": "Arithmetic / High Risk",
+          "configuration": "adaptive",
+          "success": true,
+          "latency_seconds": 63.01,
+          "total_steps": 3,
+          "completed_steps": 3,
+          "verification_calls_count": 6,
+          "verification_checks_detail": {
+            "low_risk_runs": 0,
+            "medium_risk_runs": 0,
+            "high_risk_runs": 3,
+            "baseline_skips": 0
+          },
+          "correction_attempts_count": 0,
+          "replan_count": 0,
+          "error_recovery_successes": 0,
+          "error_message": ""
+        },
+        {
+          "task_id": "RAG_01",
+          "task_category": "Knowledge Base Grounding / Medium Risk",
+          "configuration": "adaptive",
+          "success": false,
+          "latency_seconds": 63.02,
+          "total_steps": 1,
+          "completed_steps": 1,
+          "verification_calls_count": 2,
+          "verification_checks_detail": {
+            "low_risk_runs": 0,
+            "medium_risk_runs": 0,
+            "high_risk_runs": 1,
+            "baseline_skips": 0
+          },
+          "correction_attempts_count": 0,
+          "replan_count": 0,
+          "error_recovery_successes": 0,
+          "error_message": ""
+        },
+        {
+          "task_id": "FORMAT_01",
+          "task_category": "Formatting / Low Risk",
+          "configuration": "adaptive",
+          "success": false,
+          "latency_seconds": 22.06,
+          "total_steps": 2,
+          "completed_steps": 2,
+          "verification_calls_count": 0,
+          "verification_checks_detail": {
+            "low_risk_runs": 2,
+            "medium_risk_runs": 0,
+            "high_risk_runs": 0,
+            "baseline_skips": 0
+          },
+          "correction_attempts_count": 0,
+          "replan_count": 0,
+          "error_recovery_successes": 0,
+          "error_message": ""
+        },
+        {
+          "task_id": "RESEARCH_01",
+          "task_category": "Web Research & Math / Hybrid Risk",
+          "configuration": "adaptive",
+          "success": true,
+          "latency_seconds": 143.18,
+          "total_steps": 4,
+          "completed_steps": 4,
+          "verification_calls_count": 4,
+          "verification_checks_detail": {
+            "low_risk_runs": 0,
+            "medium_risk_runs": 4,
+            "high_risk_runs": 0,
+            "baseline_skips": 0
+          },
+          "correction_attempts_count": 2,
+          "replan_count": 0,
+          "error_recovery_successes": 1,
+          "error_message": ""
+        }
+      ]
+    }
+  },
+  "timestamp": 1794915828.196203
+}

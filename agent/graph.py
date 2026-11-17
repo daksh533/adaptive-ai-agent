@@ -199,6 +199,7 @@ def verifier_node(state: GraphState) -> dict:
             "verification_reason": verdict.reason,
             "error_diagnosis": state.get("error_diagnosis", ""),
             "correction_attempts": state.get("correction_attempts", 0),
+            "risk_level": risk_level,  # Phase 10: tier assigned
         }
     )
 

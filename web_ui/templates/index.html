@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Adaptive Self-Correcting AI Agent</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
     body { background: #0f1117; }
 
@@ -45,6 +46,99 @@
     .log-replanner { color: #f472b6; }
     .log-error     { color: #f87171; }
     .log-default   { color: #94a3b8; }
+
+    /* Rendered Markdown in Final Answer */
+    #final-answer-box {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 0.9rem;
+      line-height: 1.65;
+      color: #e2e8f0;
+      word-break: break-word;
+    }
+    #final-answer-box h1, #final-answer-box h2, #final-answer-box h3, #final-answer-box h4 {
+      color: #f8fafc;
+      font-weight: 700;
+      margin-top: 1rem;
+      margin-bottom: 0.4rem;
+    }
+    #final-answer-box h1 { font-size: 1.15rem; }
+    #final-answer-box h2 { font-size: 1.05rem; }
+    #final-answer-box h3 { font-size: 0.95rem; }
+    #final-answer-box p {
+      margin-bottom: 0.75rem;
+    }
+    #final-answer-box pre {
+      background: #090b10;
+      border: 1px solid #2e344e;
+      border-radius: 0.5rem;
+      padding: 0.85rem 1rem;
+      margin: 0.75rem 0;
+      overflow-x: auto;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 0.82rem;
+      color: #38bdf8;
+    }
+    #final-answer-box code {
+      font-family: 'Courier New', Courier, monospace;
+      background: #1e2230;
+      color: #a5b4fc;
+      padding: 0.15rem 0.35rem;
+      border-radius: 0.25rem;
+      font-size: 0.82rem;
+    }
+    #final-answer-box pre code {
+      background: transparent;
+      padding: 0;
+      color: inherit;
+    }
+    #final-answer-box ul {
+      list-style-type: disc;
+      padding-left: 1.35rem;
+      margin-bottom: 0.75rem;
+    }
+    #final-answer-box ol {
+      list-style-type: decimal;
+      padding-left: 1.35rem;
+      margin-bottom: 0.75rem;
+    }
+    #final-answer-box li {
+      margin-bottom: 0.25rem;
+    }
+    #final-answer-box strong {
+      color: #ffffff;
+      font-weight: 600;
+    }
+    #final-answer-box table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 0.75rem 0;
+      font-size: 0.82rem;
+    }
+    #final-answer-box th, #final-answer-box td {
+      border: 1px solid #334155;
+      padding: 0.5rem 0.75rem;
+      text-align: left;
+    }
+    #final-answer-box th {
+      background: #1e293b;
+      color: #f1f5f9;
+      font-weight: 600;
+    }
+    #final-answer-box tr:nth-child(even) {
+      background: rgba(15, 23, 42, 0.4);
+    }
+
+    /* Input modal overlay */
+    #input-modal {
+      backdrop-filter: blur(4px);
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+    .modal-enter { animation: fadeIn 0.2s ease; }
   </style>
 </head>
 <body class="min-h-screen text-gray-100">
@@ -138,6 +232,33 @@
         </button>
       </div>
 
+      <!-- ── RAG Document Upload ── -->
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+        <h2 class="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+          <span class="text-cyan-400">◆</span> Upload Document (RAG)
+          <span class="ml-auto text-xs text-gray-500">PDF or TXT</span>
+        </h2>
+        <p class="text-xs text-gray-500 mb-3">Upload a PDF or text file to add it to the agent's knowledge base for RAG retrieval.</p>
+
+        <div id="upload-drop-zone"
+          class="border-2 border-dashed border-gray-700 rounded-lg p-4 text-center cursor-pointer hover:border-cyan-600 transition mb-3"
+          onclick="document.getElementById('file-input').click()">
+          <div class="text-2xl mb-1">📄</div>
+          <p class="text-xs text-gray-400">Click to select or drop a file here</p>
+          <p class="text-xs text-gray-600 mt-1" id="selected-file-name">No file selected</p>
+        </div>
+
+        <input type="file" id="file-input" accept=".pdf,.txt" class="hidden" />
+
+        <button id="upload-btn"
+          class="w-full bg-cyan-700 hover:bg-cyan-600 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-semibold text-sm py-2 rounded-lg transition flex items-center justify-center gap-2">
+          <span id="upload-btn-icon">⬆</span>
+          <span id="upload-btn-text">Upload & Ingest</span>
+        </button>
+
+        <div id="upload-status" class="mt-3 text-xs hidden"></div>
+      </div>
+
       <!-- Plan & Steps Card -->
       <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 flex-1">
         <h2 class="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
@@ -151,11 +272,11 @@
 
     </section>
 
-    <!-- ───────────── RIGHT PANEL: Live Log ───────────── -->
+    <!-- ───────────── RIGHT PANEL: Log + Final Answer + Results ───────────── -->
     <section class="xl:col-span-3 flex flex-col gap-5">
 
       <!-- Live Terminal Log -->
-      <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 flex flex-col" style="min-height: 480px; max-height: 600px;">
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 flex flex-col" style="min-height: 400px; max-height: 500px;">
         <div class="flex items-center justify-between mb-3">
           <h2 class="text-sm font-semibold text-gray-300 flex items-center gap-2">
             <span class="text-amber-400">◆</span> Live Execution Log
@@ -170,7 +291,25 @@
         </div>
       </div>
 
-      <!-- Results Summary -->
+      <!-- ── Final Answer Panel ── -->
+      <div id="final-answer-panel" class="bg-gray-900 border border-indigo-800/60 rounded-xl p-5" style="display:none">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-semibold text-indigo-300 flex items-center gap-2">
+            <span class="text-indigo-400">★</span> Final Answer
+            <span id="final-answer-badge" class="text-xs px-2 py-0.5 rounded-full bg-emerald-900/60 text-emerald-300 border border-emerald-700"></span>
+          </h2>
+          <button id="copy-answer-btn" class="text-xs px-2.5 py-1 rounded-md bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 transition flex items-center gap-1.5">
+            <span id="copy-btn-icon">📋</span>
+            <span id="copy-btn-text">Copy</span>
+          </button>
+        </div>
+        <div class="bg-black/35 rounded-lg p-5 border border-gray-800/60">
+          <div id="final-answer-box"></div>
+        </div>
+        <div id="final-answer-meta" class="mt-3 flex flex-wrap gap-2 text-xs"></div>
+      </div>
+
+      <!-- Verification Results -->
       <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
         <h2 class="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
           <span class="text-pink-400">◆</span> Verification Results
@@ -183,14 +322,37 @@
     </section>
   </main>
 
-  <!-- Spin animation via inline style -->
-  <style>
-    @keyframes spin { to { transform: rotate(360deg); } }
-  </style>
+  <!-- ───────────── INPUT MODAL (for intercepted input() calls) ───────────── -->
+  <div id="input-modal" class="hidden fixed inset-0 bg-black/70 z-50 items-center justify-center">
+    <div class="modal-enter bg-gray-900 border border-indigo-700 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-9 h-9 rounded-lg bg-indigo-600/40 flex items-center justify-center text-xl">⌨️</div>
+        <div>
+          <h3 class="font-bold text-white text-sm">Agent Needs Input</h3>
+          <p class="text-xs text-gray-400">The code is asking for user input</p>
+        </div>
+      </div>
+      <p id="modal-prompt-text" class="text-sm text-indigo-300 mb-3 font-medium bg-indigo-900/30 rounded-lg px-3 py-2 border border-indigo-800/50"></p>
+      <input id="modal-input-value" type="text"
+        class="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-indigo-500 mb-4"
+        placeholder="Type your answer here…" />
+      <div class="flex gap-3">
+        <button id="modal-submit-btn"
+          class="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm py-2 rounded-lg transition">
+          Submit
+        </button>
+        <button id="modal-skip-btn"
+          class="px-4 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm py-2 rounded-lg transition">
+          Skip
+        </button>
+      </div>
+    </div>
+  </div>
 
   <script>
     // ─────────────── State ───────────────
     let currentEventSource = null;
+    let currentRunId = null;
     let stepStatuses = {};
     let currentPlan = [];
 
@@ -212,12 +374,12 @@
       const span = document.createElement('span');
 
       let cls = 'log-default';
-      if (text.includes('[Planner]'))       cls = 'log-planner';
-      else if (text.includes('[Executor]')) cls = 'log-executor';
-      else if (text.includes('[Verifier]')) cls = 'log-verifier';
-      else if (text.includes('[RiskClassifier]')) cls = 'log-risk';
-      else if (text.includes('[Corrector]'))cls = 'log-corrector';
-      else if (text.includes('[Replanner]'))cls = 'log-replanner';
+      if (text.includes('[Planner]'))            cls = 'log-planner';
+      else if (text.includes('[Executor]'))      cls = 'log-executor';
+      else if (text.includes('[Verifier]'))      cls = 'log-verifier';
+      else if (text.includes('[RiskClassifier]'))cls = 'log-risk';
+      else if (text.includes('[Corrector]'))     cls = 'log-corrector';
+      else if (text.includes('[Replanner]'))     cls = 'log-replanner';
       else if (text.includes('Error') || text.includes('FAILED') || text.includes('error')) cls = 'log-error';
 
       span.className = cls;
@@ -273,7 +435,7 @@
       }
     }
 
-    // ─────────────── Results Panel ───────────────
+    // ─────────────── Verification Results Panel ───────────────
     function renderResults(results) {
       const container = document.getElementById('results-container');
       container.innerHTML = '';
@@ -304,6 +466,228 @@
       });
     }
 
+    // ─────────────── Markdown & Text Formatter ───────────────
+    function formatMarkdown(text) {
+      if (!text) return '';
+
+      // Clean up common artifacts (e.g. escaped quotes, double prefixes)
+      let cleaned = String(text).trim();
+
+      // If marked library is loaded from CDN, use it for rich rendering
+      if (typeof marked !== 'undefined' && marked.parse) {
+        try {
+          return marked.parse(cleaned);
+        } catch (e) {
+          console.warn('marked.parse error, using fallback:', e);
+        }
+      }
+
+      // Safe fallback formatter if offline:
+      let html = escapeHtml(cleaned);
+
+      // Multi-line code blocks: ```lang ... ``` -> styled <pre><code>
+      html = html.replace(/```(?:[a-zA-Z0-9_\-]+)?\s*([\s\S]*?)```/g, function(match, code) {
+        return `<pre><code>${code.trim()}</code></pre>`;
+      });
+
+      // Inline code: `code`
+      html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+      // Headings without raw #: ### Heading
+      html = html.replace(/^###\s*(.*$)/gim, '<h3>$1</h3>');
+      html = html.replace(/^##\s*(.*$)/gim, '<h2>$1</h2>');
+      html = html.replace(/^#\s*(.*$)/gim, '<h1>$1</h1>');
+
+      // Bold: **text** -> <strong>text</strong>
+      html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+
+      // Italic: *text* -> <em>text</em>
+      html = html.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
+
+      // Line breaks outside <pre>
+      html = html.replace(/\n\n/g, '<p></p>');
+      html = html.replace(/\n/g, '<br/>');
+
+      return html;
+    }
+
+    // ─────────────── Final Answer Panel ───────────────
+    let currentRawAnswer = '';
+
+    function renderFinalAnswer(results, agentStatus) {
+      const panel = document.getElementById('final-answer-panel');
+      const box = document.getElementById('final-answer-box');
+      const badge = document.getElementById('final-answer-badge');
+      const meta = document.getElementById('final-answer-meta');
+
+      if (!results || results.length === 0) return;
+
+      const passedResults = results.filter(r => r.verification_status === 'passed');
+      let answerText = '';
+
+      if (passedResults.length === 1) {
+        answerText = passedResults[0].result || '(No output)';
+      } else if (passedResults.length > 1) {
+        answerText = passedResults.map((r, i) =>
+          `### Step ${results.indexOf(r) + 1}: ${r.step}\n\n${r.result || '(No output)'}`
+        ).join('\n\n---\n\n');
+      } else {
+        const last = results[results.length - 1];
+        answerText = last.result || '(Agent could not produce a verified answer)';
+      }
+
+      currentRawAnswer = answerText;
+
+      // Render beautiful markdown instead of raw text with ``` and #
+      box.innerHTML = formatMarkdown(answerText);
+
+      // Badge
+      const success = agentStatus === 'completed';
+      badge.textContent = success ? '✅ Completed' : '⚠ Partial';
+      badge.className = `text-xs px-2 py-0.5 rounded-full border ${
+        success ? 'bg-emerald-900/60 text-emerald-300 border-emerald-700'
+                : 'bg-amber-900/60 text-amber-300 border-amber-700'
+      }`;
+
+      // Meta info row
+      meta.innerHTML = '';
+      const stepCount = `<span class="px-2 py-1 rounded bg-gray-800 text-gray-400 border border-gray-700">${results.length} step${results.length !== 1 ? 's' : ''}</span>`;
+      const passCount = `<span class="px-2 py-1 rounded bg-emerald-900/40 text-emerald-400 border border-emerald-800">${passedResults.length} passed</span>`;
+      const corrections = results.reduce((sum, r) => sum + (r.correction_attempts || 0), 0);
+      const corrInfo = corrections > 0
+        ? `<span class="px-2 py-1 rounded bg-amber-900/40 text-amber-400 border border-amber-800">${corrections} correction${corrections !== 1 ? 's' : ''}</span>`
+        : '';
+      meta.innerHTML = stepCount + passCount + corrInfo;
+
+      panel.style.display = 'block';
+      panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    // Copy button listener
+    document.getElementById('copy-answer-btn').addEventListener('click', () => {
+      if (!currentRawAnswer) return;
+      navigator.clipboard.writeText(currentRawAnswer).then(() => {
+        const textSpan = document.getElementById('copy-btn-text');
+        const iconSpan = document.getElementById('copy-btn-icon');
+        textSpan.textContent = 'Copied!';
+        iconSpan.textContent = '✓';
+        setTimeout(() => {
+          textSpan.textContent = 'Copy';
+          iconSpan.textContent = '📋';
+        }, 2000);
+      });
+    });
+
+    // ─────────────── Input Modal ───────────────
+    const inputModal = document.getElementById('input-modal');
+    const modalPrompt = document.getElementById('modal-prompt-text');
+    const modalInput = document.getElementById('modal-input-value');
+    const modalSubmit = document.getElementById('modal-submit-btn');
+    const modalSkip = document.getElementById('modal-skip-btn');
+
+    function showInputModal(prompt, runId) {
+      modalPrompt.textContent = prompt || 'Please provide input:';
+      modalInput.value = '';
+      inputModal.classList.remove('hidden');
+      inputModal.classList.add('flex');
+      setTimeout(() => modalInput.focus(), 100);
+
+      function submit() {
+        const val = modalInput.value;
+        inputModal.classList.add('hidden');
+        inputModal.classList.remove('flex');
+        fetch(`/api/input/${runId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ value: val }),
+        });
+        logLine(`[User Input] "${val}"`);
+        modalInput.removeEventListener('keydown', onEnter);
+      }
+
+      function onEnter(e) { if (e.key === 'Enter') submit(); }
+      modalInput.addEventListener('keydown', onEnter);
+      modalSubmit.onclick = submit;
+      modalSkip.onclick = () => {
+        inputModal.classList.add('hidden');
+        inputModal.classList.remove('flex');
+        fetch(`/api/input/${runId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ value: '' }),
+        });
+        modalInput.removeEventListener('keydown', onEnter);
+      };
+    }
+
+    // ─────────────── File Upload ───────────────
+    const fileInput = document.getElementById('file-input');
+    const uploadBtn = document.getElementById('upload-btn');
+    const uploadStatus = document.getElementById('upload-status');
+    const dropZone = document.getElementById('upload-drop-zone');
+
+    fileInput.addEventListener('change', () => {
+      const f = fileInput.files[0];
+      document.getElementById('selected-file-name').textContent = f ? f.name : 'No file selected';
+    });
+
+    // Drag-and-drop support
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('border-cyan-500'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('border-cyan-500'));
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.classList.remove('border-cyan-500');
+      if (e.dataTransfer.files.length) {
+        fileInput.files = e.dataTransfer.files;
+        document.getElementById('selected-file-name').textContent = e.dataTransfer.files[0].name;
+      }
+    });
+
+    uploadBtn.addEventListener('click', async () => {
+      const file = fileInput.files[0];
+      if (!file) {
+        showUploadStatus('⚠ Please select a file first.', 'text-amber-400');
+        return;
+      }
+
+      uploadBtn.disabled = true;
+      document.getElementById('upload-btn-icon').textContent = '⏳';
+      document.getElementById('upload-btn-text').textContent = 'Uploading…';
+      uploadStatus.className = 'mt-3 text-xs';
+      showUploadStatus('⏳ Ingesting document into ChromaDB…', 'text-cyan-400');
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        const resp = await fetch('/api/upload', { method: 'POST', body: formData });
+        const data = await resp.json();
+
+        if (resp.ok && data.status === 'success') {
+          showUploadStatus(
+            `✅ ${data.message}`,
+            'text-emerald-400'
+          );
+          document.getElementById('selected-file-name').textContent = 'No file selected';
+          fileInput.value = '';
+        } else {
+          showUploadStatus(`❌ Error: ${data.error || 'Unknown error'}`, 'text-red-400');
+        }
+      } catch (err) {
+        showUploadStatus(`❌ Network error: ${err.message}`, 'text-red-400');
+      } finally {
+        uploadBtn.disabled = false;
+        document.getElementById('upload-btn-icon').textContent = '⬆';
+        document.getElementById('upload-btn-text').textContent = 'Upload & Ingest';
+      }
+    });
+
+    function showUploadStatus(msg, colorClass) {
+      uploadStatus.textContent = msg;
+      uploadStatus.className = `mt-3 text-xs ${colorClass}`;
+      uploadStatus.classList.remove('hidden');
+    }
+
     // ─────────────── Run ───────────────
     document.getElementById('run-btn').addEventListener('click', async () => {
       const goal = document.getElementById('goal-input').value.trim();
@@ -315,6 +699,8 @@
       document.getElementById('log-box').innerHTML = '';
       document.getElementById('steps-container').innerHTML = '<p class="text-xs text-gray-600 italic">Planning…</p>';
       document.getElementById('results-container').innerHTML = '<p class="text-xs text-gray-600 italic">Waiting for execution…</p>';
+      document.getElementById('final-answer-panel').style.display = 'none';
+      document.getElementById('final-answer-box').textContent = '';
       setStatusBadge('Running…', 'bg-indigo-900/60 text-indigo-300 border-indigo-700');
 
       const btn = document.getElementById('run-btn');
@@ -332,6 +718,7 @@
         body: JSON.stringify({ goal, mode }),
       });
       const { run_id } = await resp.json();
+      currentRunId = run_id;
 
       // Stream events
       const es = new EventSource(`/api/stream/${run_id}`);
@@ -340,12 +727,6 @@
       es.addEventListener('log', e => {
         const { text } = JSON.parse(e.data);
         logLine(text);
-
-        // Extract plan from planner log lines
-        const planMatch = text.match(/^\s+(\d+)\.\s+(.+)$/);
-        if (planMatch && text.match(/  \d+\./)) {
-          // Will be overwritten by the complete event which has the proper plan
-        }
       });
 
       es.addEventListener('status', e => {
@@ -353,10 +734,17 @@
         logLine('→ ' + text);
       });
 
+      // ── NEW: Handle input_required from server ──
+      es.addEventListener('input_required', e => {
+        const { prompt } = JSON.parse(e.data);
+        showInputModal(prompt, run_id);
+      });
+
       es.addEventListener('complete', e => {
         const data = JSON.parse(e.data);
         renderPlan(data.plan || []);
         renderResults(data.results || []);
+        renderFinalAnswer(data.results || [], data.agent_status);
 
         const success = data.agent_status === 'completed';
         setStatusBadge(

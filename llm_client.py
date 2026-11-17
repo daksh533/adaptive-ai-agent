@@ -3,15 +3,18 @@ llm_client.py
 
 Single shared LLM gateway for the whole agent.
 
-Every module (planner, executor, verifier, corrector, replanner) used to build
-its own ``OpenAI`` client and its own retry loop. This module centralises that
-logic so the model, base URL, timeouts and rate-limit policy are configured in
-exactly one place.
+Supports both Groq and Google Gemini (OpenAI-compatible) with:
+  • Provider selection via LLM_PROVIDER=groq or LLM_PROVIDER=gemini
+  • Automatic fallback between Groq and Gemini if daily quota is reached
+  • Centralized retry loop with exponential backoff on 429 rate limits
+  • Request throttling to prevent rate limit spikes
 
 Environment variables (loaded from ``.env``):
-    GROQ_API_KEY   – required
-    GROQ_MODEL     – optional, defaults to ``openai/gpt-oss-20b``
-    GROQ_BASE_URL  – optional, defaults to ``https://api.groq.com/openai/v1``
+    LLM_PROVIDER   – "gemini" | "groq" | "auto" (default: "auto")
+    GOOGLE_API_KEY – Google Gemini API key (or GEMINI_API_KEY)
+    GEMINI_MODEL   – optional, defaults to "gemini-1.5-flash"
+    GROQ_API_KEY   – Groq API key
+    GROQ_MODEL     – optional, defaults to "llama-3.1-8b-instant"
 """
 
 from __future__ import annotations
@@ -26,15 +29,22 @@ from openai import OpenAI, RateLimitError
 
 load_dotenv()
 
-DEFAULT_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
-DEFAULT_BASE_URL = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1")
+# ---------------------------------------------------------------------------
+# Provider & Model Settings
+# ---------------------------------------------------------------------------
 
-_client: OpenAI | None = None
+DEFAULT_GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
+DEFAULT_GROQ_BASE_URL = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1")
 
-# Minimum gap between consecutive LLM calls (seconds).
-# Groq free tier allows ~30 req/min → ~2.0s gap is safe.
-_MIN_CALL_INTERVAL = float(os.getenv("LLM_CALL_INTERVAL", "2.0"))
+DEFAULT_GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+DEFAULT_GEMINI_BASE_URL = os.getenv("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/")
+
+_MIN_CALL_INTERVAL = float(os.getenv("LLM_CALL_INTERVAL", "1.5"))
 _last_call_time: float = 0.0
+
+_active_client: OpenAI | None = None
+_active_provider: str | None = None
+_active_model: str | None = None
 
 
 def _throttle() -> None:
@@ -46,43 +56,89 @@ def _throttle() -> None:
     _last_call_time = time.time()
 
 
-# ---------------------------------------------------------------------------
-# Client
-# ---------------------------------------------------------------------------
-
-def get_client() -> OpenAI:
+def detect_provider() -> str:
     """
-    Return the shared OpenAI-compatible client, creating it on first use.
-
-    Creating the client lazily means importing the agent (and running offline
-    tests) does not require ``GROQ_API_KEY`` to be set. The error is raised only
-    when a real LLM call is attempted.
+    Determine which provider to use.
+    If explicitly set via LLM_PROVIDER, honor it.
+    Otherwise prefer Gemini if GOOGLE_API_KEY/GEMINI_API_KEY is available,
+    falling back to Groq.
     """
-    global _client
-    if _client is None:
-        api_key = os.getenv("GROQ_API_KEY")
+    requested = os.getenv("LLM_PROVIDER", "").strip().lower()
+    if requested in ("gemini", "google"):
+        return "gemini"
+    if requested == "groq":
+        return "groq"
+
+    # Auto-detection: prefer Gemini if key is provided (higher free quota)
+    if os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY"):
+        return "gemini"
+    if os.getenv("GROQ_API_KEY"):
+        return "groq"
+
+    return "groq"
+
+
+def get_client(provider: str | None = None) -> tuple[OpenAI, str, str]:
+    """
+    Return (client, provider_name, default_model).
+    Initialises client lazily.
+    """
+    global _active_client, _active_provider, _active_model
+
+    prov = provider or detect_provider()
+
+    if _active_client is not None and _active_provider == prov:
+        return _active_client, _active_provider, _active_model
+
+    if prov == "gemini":
+        api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
         if not api_key:
             raise RuntimeError(
-                "GROQ_API_KEY is not set. Add it to the project .env file:\n"
-                "    GROQ_API_KEY=your_key_here"
+                "GOOGLE_API_KEY / GEMINI_API_KEY is not set. Add it to .env:\n"
+                "    GOOGLE_API_KEY=your_key_here"
             )
-        _client = OpenAI(
+        _active_provider = "gemini"
+        _active_model = DEFAULT_GEMINI_MODEL
+        _active_client = OpenAI(
             api_key=api_key,
-            base_url=DEFAULT_BASE_URL,
+            base_url=DEFAULT_GEMINI_BASE_URL,
             timeout=60.0,
-            max_retries=0,  # retries are handled below
+            max_retries=0,
         )
-    return _client
+        print(f"[LLM] Active Provider: Google Gemini (model: {_active_model})")
+        return _active_client, _active_provider, _active_model
+
+    # Default to Groq
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        raise RuntimeError(
+            "GROQ_API_KEY is not set. Add it to .env:\n"
+            "    GROQ_API_KEY=your_key_here"
+        )
+    _active_provider = "groq"
+    _active_model = DEFAULT_GROQ_MODEL
+    _active_client = OpenAI(
+        api_key=api_key,
+        base_url=DEFAULT_GROQ_BASE_URL,
+        timeout=60.0,
+        max_retries=0,
+    )
+    print(f"[LLM] Active Provider: Groq (model: {_active_model})")
+    return _active_client, _active_provider, _active_model
+
+
+# Backwards compatibility
+DEFAULT_MODEL = os.getenv("GROQ_MODEL", DEFAULT_GROQ_MODEL)
+DEFAULT_BASE_URL = DEFAULT_GROQ_BASE_URL
 
 
 # ---------------------------------------------------------------------------
-# Retry-aware chat completion
+# Retry-aware chat completion with fallback
 # ---------------------------------------------------------------------------
 
 def _retry_delay(exc: Exception, attempt: int) -> float:
-    """Honour the delay suggested by Groq when present, else back off."""
+    """Honour the delay suggested by API when present, else back off."""
     wait = 3.0 * (1.5 ** attempt)
-    # Handles "500ms", "106s", "in 1.5s", "in 1m46.27s", "retry after 5s", etc.
     match = re.search(
         r"(?:try again in|retry after|in)\s+(?:(?P<minutes>\d+)m)?\s*(?:(?P<millis>\d+)ms|(?P<seconds>[\d\.]+)s)",
         str(exc),
@@ -98,37 +154,37 @@ def _retry_delay(exc: Exception, attempt: int) -> float:
     return wait
 
 
-# A demo should fail fast rather than appear frozen. If the API asks us to wait
-# longer than this, surface a clear error instead of sleeping.
 MAX_SINGLE_WAIT = float(os.getenv("LLM_MAX_RETRY_WAIT", "120"))
 
 
 def _is_daily_quota_error(exc: Exception) -> bool:
-    """Detect the non-recoverable 'tokens per day' free-tier limit."""
+    """Detect non-recoverable 'tokens per day' or daily quota limits."""
     text = str(exc).lower()
     return any(
         marker in text
-        for marker in ("tokens per day", "tpd", "daily limit", "daily quota")
+        for marker in ("tokens per day", "tpd", "daily limit", "daily quota", "resource_exhausted")
     )
 
 
-def _quota_runtime_error(exc: Exception, wait: float | None = None) -> RuntimeError:
-    """Build an actionable error for an exhausted or long rate limit."""
-    if _is_daily_quota_error(exc):
-        detail = "the Groq free-tier daily token quota is exhausted"
-    elif wait is not None:
-        detail = (
-            f"the API asked us to wait {wait:.0f}s, longer than the "
-            f"{MAX_SINGLE_WAIT:.0f}s demo-friendly limit"
-        )
-    else:
-        detail = "the API rate limit is still active"
+def _try_fallback_provider() -> bool:
+    """
+    If active provider is Groq and Google API key exists, switch to Gemini.
+    If active provider is Gemini and Groq key exists, switch to Groq.
+    Returns True if successfully switched.
+    """
+    global _active_client, _active_provider, _active_model
+    current = _active_provider or detect_provider()
 
-    return RuntimeError(
-        f"Groq rate limit: {detail}. Wait for the quota to reset, "
-        "or set GROQ_MODEL in .env to a model with more available quota. "
-        "Tip: run 'test_offline.py' to demo the agent logic without API calls."
-    )
+    if current == "groq" and (os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")):
+        print("\n[LLM] ⚠️ Groq quota reached. Automatically switching to Google Gemini...")
+        get_client("gemini")
+        return True
+    elif current == "gemini" and os.getenv("GROQ_API_KEY"):
+        print("\n[LLM] ⚠️ Gemini quota reached. Automatically switching to Groq...")
+        get_client("groq")
+        return True
+
+    return False
 
 
 def chat_completion(
@@ -138,25 +194,17 @@ def chat_completion(
     tools: list | None = None,
     tool_choice: str | None = None,
     temperature: float | None = None,
-    max_retries: int = 6,
+    max_retries: int = 5,
     label: str = "LLM",
 ):
     """
-    Call the chat-completions API, retrying with exponential backoff on 429s.
-
-    Args:
-        messages:     OpenAI-format message list.
-        model:        Override the default model.
-        tools:        Optional tool schemas.
-        tool_choice:  Optional tool-choice policy.
-        temperature:  Optional sampling temperature.
-        max_retries:  Number of retries on rate limiting.
-        label:        Short tag used in log messages (e.g. "Planner").
-
-    Returns:
-        The raw ``ChatCompletion`` response.
+    Call the chat-completions API with retries and automatic multi-provider fallback.
     """
-    kwargs: dict = {"model": model or DEFAULT_MODEL, "messages": messages}
+    client, provider_name, default_model = get_client()
+
+    target_model = model or default_model
+
+    kwargs: dict = {"model": target_model, "messages": messages}
     if tools is not None:
         kwargs["tools"] = tools
     if tool_choice is not None:
@@ -167,36 +215,60 @@ def chat_completion(
     for attempt in range(max_retries):
         try:
             _throttle()
-            return get_client().chat.completions.create(**kwargs)
+            return client.chat.completions.create(**kwargs)
+
         except RateLimitError as exc:
+            if _is_daily_quota_error(exc):
+                if _try_fallback_provider():
+                    client, _, new_model = get_client()
+                    kwargs["model"] = new_model
+                    continue
+                raise RuntimeError(
+                    f"Daily token quota exhausted on {provider_name}. "
+                    "Switch providers in .env (LLM_PROVIDER=gemini or LLM_PROVIDER=groq) or wait for reset."
+                ) from exc
+
             wait = _retry_delay(exc, attempt)
-            if _is_daily_quota_error(exc) or wait > MAX_SINGLE_WAIT:
-                raise _quota_runtime_error(exc, wait) from exc
-            print(f"[{label}] Rate limit hit. Pausing {wait:.1f}s before retrying (attempt {attempt + 1}/{max_retries})...")
-            time.sleep(wait)
-        except Exception as exc:
-            # Some SDK/proxy combinations surface 429s as generic APIStatusError.
-            if "429" not in str(exc):
-                raise
-            wait = _retry_delay(exc, attempt)
-            if _is_daily_quota_error(exc) or wait > MAX_SINGLE_WAIT:
-                raise _quota_runtime_error(exc, wait) from exc
-            print(f"[{label}] Rate limit hit. Pausing {wait:.1f}s before retrying (attempt {attempt + 1}/{max_retries})...")
+            if wait > MAX_SINGLE_WAIT:
+                if _try_fallback_provider():
+                    client, _, new_model = get_client()
+                    kwargs["model"] = new_model
+                    continue
+                raise RuntimeError(f"Rate limit wait of {wait:.0f}s is too long.") from exc
+
+            print(f"[{label}] Rate limit hit on {provider_name}. Pausing {wait:.1f}s before retrying (attempt {attempt + 1}/{max_retries})...")
             time.sleep(wait)
 
-    try:
-        _throttle()
-        return get_client().chat.completions.create(**kwargs)
-    except RateLimitError as exc:
-        raise _quota_runtime_error(exc) from exc
-    except Exception as exc:
-        if "429" not in str(exc):
-            raise
-        raise _quota_runtime_error(exc) from exc
+        except Exception as exc:
+            err_str = str(exc).lower()
+            if "not found" in err_str or "404" in err_str or "does not exist" in err_str:
+                if provider_name == "gemini" and kwargs.get("model") != "gemini-1.5-flash":
+                    fallback_model = "gemini-2.0-flash" if kwargs.get("model") != "gemini-2.0-flash" else "gemini-1.5-flash"
+                    print(f"[{label}] Note: Model '{kwargs.get('model')}' not found on endpoint. Retrying with '{fallback_model}'...")
+                    kwargs["model"] = fallback_model
+                    continue
+            if "429" in err_str or "quota" in err_str or "resource_exhausted" in err_str:
+                if _is_daily_quota_error(exc) or "daily" in err_str:
+                    if _try_fallback_provider():
+                        client, _, new_model = get_client()
+                        kwargs["model"] = new_model
+                        continue
+                wait = _retry_delay(exc, attempt)
+                print(f"[{label}] Rate limit / quota hit on {provider_name}. Pausing {wait:.1f}s (attempt {attempt + 1}/{max_retries})...")
+                time.sleep(wait)
+            else:
+                # If tool error or parameter issue with Gemini/Groq, raise
+                raise
+
+    # Last attempt
+    _throttle()
+    return client.chat.completions.create(**kwargs)
 
 
 def message_content(response) -> str:
     """Return the text content of the first choice, stripped."""
+    if not response or not response.choices:
+        return ""
     return (response.choices[0].message.content or "").strip()
 
 
@@ -207,9 +279,7 @@ def message_content(response) -> str:
 def extract_json_dict(text: str) -> dict:
     """
     Best-effort extraction of a JSON object from an LLM response.
-
     Handles plain JSON, fenced ```json blocks, and surrounding prose.
-    Returns ``{}`` when no valid object can be found.
     """
     if not text:
         return {}
@@ -240,7 +310,6 @@ def extract_json_dict(text: str) -> dict:
 def extract_plan(text: str) -> list[str] | None:
     """
     Parse a ``{"plan": [...]}`` response.
-
     Returns a non-empty list of strings, or ``None`` if the payload is invalid.
     """
     data = extract_json_dict(text)

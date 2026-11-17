@@ -83,10 +83,11 @@ class BenchmarkEvaluator:
                 verification_calls += 2
                 checks_detail["high_risk_runs"] += 1
             else:  # adaptive
-                if "low risk" in reason or "numeric re-check passed" in reason:
+                tier = entry.get("risk_level", "").lower()
+                if tier == "low" or "low risk" in reason or "numeric re-check passed" in reason:
                     checks_detail["low_risk_runs"] += 1
                     verification_calls += 0  # 0 LLM calls for LOW
-                elif "medium risk" in reason or "grounding checks passed" in reason:
+                elif tier == "medium" or "medium risk" in reason or "grounding checks passed" in reason:
                     checks_detail["medium_risk_runs"] += 1
                     verification_calls += 1  # 1 LLM call for MEDIUM
                 else:
@@ -145,6 +146,7 @@ class BenchmarkEvaluator:
         for task in self.tasks:
             for config in self.configurations:
                 self.run_single(task, config)
+                self.save_reports()
                 if delay_between_tasks > 0:
                     time.sleep(delay_between_tasks)
 
